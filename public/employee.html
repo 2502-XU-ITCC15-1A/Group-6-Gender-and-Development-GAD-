@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>GADIMS - Employee Dashboard</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="brand-badge">XU</div>
+          <div class="brand-title">
+            <div class="wordmark" aria-label="Xavier University Ateneo deCagayan">
+              <div class="wordmark-xu">XAVIER UNIVERSITY</div>
+              <div class="wordmark-ateneo">Ateneo de Cagayan</div>
+            </div>
+            
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <div class="topbar-user" aria-live="polite">
+            <button class="topbar-user-name topbar-profile-trigger" id="employee-profile-trigger" type="button">—</button>
+            <div class="topbar-user-meta" id="employee-topbar-email">—</div>
+            <div class="topbar-user-meta" id="employee-topbar-id">—</div>
+          </div>
+          <span class="theme-emoji" role="button" tabindex="0" data-theme-toggle aria-label="Toggle theme">☾</span>
+          <button class="btn secondary" id="employee-logout-btn" type="button">Logout</button>
+        </div>
+      </div>
+    </header>
+
+    <nav class="navbar" aria-label="Employee navigation">
+      <div class="navbar-inner">
+        <span class="nav-section-label">Employee Portal</span>
+        <div class="nav-links">
+          <button class="dashboard-sidebar-link" type="button" data-scroll-target="profile-section">Profile</button>
+          <button class="dashboard-sidebar-link" type="button" data-scroll-target="compliance-section">Compliance</button>
+          <button class="dashboard-sidebar-link" type="button" data-scroll-target="upcoming-section">Seminars</button>
+          <button class="dashboard-sidebar-link" type="button" data-scroll-target="certificates-section">Certificates</button>
+        </div>
+      </div>
+    </nav>
+
+    <section class="hero">
+      <div class="hero-inner">
+        <h1>
+          Welcome back, <span id="employee-welcome-name">—</span>
+        </h1>
+        <p class="muted" id="employee-welcome-subtitle">Track your GAD seminar progress and compliance status</p>
+      </div>
+    </section>
+
+    <main class="container">
+      <div class="dashboard-layout">
+        <aside class="dashboard-sidebar">
+          <h2>Employee</h2>
+          <div class="dashboard-sidebar-nav">
+            <button class="dashboard-sidebar-link is-active" type="button" data-scroll-target="compliance-section">Dashboard</button>
+            <button class="dashboard-sidebar-link" type="button" data-scroll-target="profile-section">Profile</button>
+            <button class="dashboard-sidebar-link" type="button" data-scroll-target="upcoming-section">Upcoming</button>
+            <button class="dashboard-sidebar-link" type="button" data-scroll-target="joined-section">Joined</button>
+            <button class="dashboard-sidebar-link" type="button" data-scroll-target="certificates-section">Certificates</button>
+            <button class="dashboard-sidebar-link" type="button" data-scroll-target="help-section">Support</button>
+          </div>
+          <p class="muted small" style="margin-top: 1rem; color: rgba(255,255,255,0.85);">
+            Your portal is organized by compliance and seminars.
+          </p>
+        </aside>
+
+        <section class="dashboard-main">
+          <section class="card" id="compliance-section" style="margin-bottom: 1.25rem;">
+            <div style="display:flex; align-items:flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+              <div>
+                <h2>Compliance Status</h2>
+                <p class="muted" style="margin-top: -0.35rem;">
+                  Your current GAD seminar completion progress
+                </p>
+              </div>
+              <div style="min-width: 210px;">
+                <div class="badge badge-soft" id="compliance-status-badge" style="display:inline-flex; background: rgba(16,185,129,0.10); color:#059669; border-color: rgba(16,185,129,0.25);">
+                  Compliant
+                </div>
+                <div class="muted small" style="margin-top: 0.55rem; font-size: 0.82rem;" id="compliance-updated-at">
+                  Status as of —
+                </div>
+              </div>
+            </div>
+
+        <div style="margin-top: 1rem;">
+          <div class="muted small" style="font-size: 0.9rem; display:flex; justify-content: space-between;">
+            <span id="compliance-progress-text">Progress: 0 of 0 Required Seminars</span>
+            <span id="compliance-progress-percent">0%</span>
+          </div>
+          <div style="height: 10px; background: rgba(15, 23, 42, 0.08); border-radius: 999px; overflow:hidden; margin-top: 0.55rem;">
+            <div id="compliance-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(135deg, var(--xu-blue), var(--xu-blue-2));"></div>
+          </div>
+          <div id="compliance-advice-box" style="margin-top: 0.75rem; padding: 0.85rem 0.9rem; border-radius: 0.85rem; border:1px solid rgba(16,185,129,0.22); background: rgba(16,185,129,0.08);">
+            <div id="compliance-advice-header" style="font-weight: 600; color:#059669;">All Requirements Completed!</div>
+            <div class="muted" style="margin-top: 0.15rem; font-size: 0.92rem;" id="compliance-advice-text">
+              You have successfully completed all required GAD seminars.
+            </div>
+          </div>
+        </div>
+          </section>
+
+          <section class="card" id="profile-section" style="margin-bottom: 1.25rem;">
+        <div class="page-header">
+          <div>
+            <h2>Employee Profile</h2>
+            <p class="muted" style="margin-top:-0.25rem;">Click your name or use the sidebar to focus this tab.</p>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+          <div>
+            <div class="muted small" style="font-size: 0.82rem;">Employee ID</div>
+            <div style="font-weight: 600; margin-top: 0.25rem;" id="employee-info-id">—</div>
+
+            <div class="muted small" style="font-size: 0.82rem; margin-top: 0.9rem;">Email Address</div>
+            <div style="margin-top: 0.25rem;" id="employee-info-email">—</div>
+
+            <div class="muted small" style="font-size: 0.82rem; margin-top: 0.9rem;">Birth Sex</div>
+            <div style="margin-top: 0.25rem;" id="employee-info-birthSex">—</div>
+          </div>
+
+          <div>
+            <div class="muted small" style="font-size: 0.82rem;">Department</div>
+            <div style="font-weight: 600; margin-top: 0.25rem;" id="employee-info-department">—</div>
+
+            <div class="muted small" style="font-size: 0.82rem; margin-top: 0.9rem;">Position</div>
+            <div style="margin-top: 0.25rem;" id="employee-info-position">—</div>
+
+            <div class="muted small" style="font-size: 0.82rem; margin-top: 0.9rem;">Gender Identity</div>
+            <div style="margin-top: 0.25rem;" id="employee-info-genderIdentity">—</div>
+          </div>
+
+          <div>
+            <div class="muted small" style="font-size: 0.82rem;">Account Status</div>
+            <div style="font-weight: 600; margin-top: 0.25rem;" id="employee-info-status">Active</div>
+
+            <div class="muted small" style="font-size: 0.82rem; margin-top: 0.9rem;">Department Gender Counts</div>
+            <div style="margin-top: 0.35rem; display:flex; gap:0.9rem; flex-wrap:wrap;">
+              <div>
+                <div class="muted small" style="font-size:0.82rem;">Male</div>
+                <div style="font-weight: 600;" id="employee-info-maleCount">0</div>
+              </div>
+              <div>
+                <div class="muted small" style="font-size:0.82rem;">Female</div>
+                <div style="font-weight: 600;" id="employee-info-femaleCount">0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="upcoming-section" style="margin-bottom: 1.25rem;">
+        <div style="display:flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap;">
+          <div>
+            <h2>Upcoming Seminars</h2>
+            <p class="muted" style="margin-top: -0.35rem;">
+              Explore and register for upcoming GAD seminars and workshops.
+            </p>
+          </div>
+          <label style="min-width: 200px; margin-bottom: 0;">
+            Filter seminars
+            <select id="seminar-filter-select" style="margin-top: 0.35rem;">
+              <option value="open" selected>Open seminars</option>
+              <option value="joined">Joined seminars</option>
+            </select>
+          </label>
+        </div>
+
+        <div style="position: relative; margin-top: 1.05rem;">
+          <button class="btn secondary" id="upcoming-prev-btn" type="button" style="position:absolute; left:-0.4rem; top:50%; transform: translateY(-50%); padding:0.4rem 0.85rem;">
+            ‹
+          </button>
+
+          <div
+            id="upcoming-carousel"
+            style="display:flex; gap: 1rem; overflow-x:auto; scroll-behavior:smooth; padding: 0.4rem 2.3rem;"
+          ></div>
+
+          <button class="btn secondary" id="upcoming-next-btn" type="button" style="position:absolute; right:-0.4rem; top:50%; transform: translateY(-50%); padding:0.4rem 0.85rem;">
+            ›
+          </button>
+        </div>
+
+        <p class="status" id="upcoming-status" style="margin-top: 0.9rem;"></p>
+      </section>
+
+      <section class="card" id="joined-section" style="margin-bottom: 1.25rem;">
+        <div class="page-header">
+          <div>
+            <h2>Joined Seminars</h2>
+          </div>
+        </div>
+        <div id="joined-seminars-list" class="split-grid"></div>
+      </section>
+
+      <section class="card" id="certificates-section" style="margin-bottom: 1.25rem;">
+        <div style="display:flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap;">
+          <div>
+            <h2>Completed Certificates</h2>
+            <p class="muted" style="margin-top: -0.35rem;" id="certificates-count-text">Your GAD seminar completion certificates</p>
+          </div>
+          <button class="btn secondary" id="certificates-download-all-btn" type="button">
+            Download All
+          </button>
+        </div>
+        <div id="certificates-list" style="margin-top: 0.95rem; display:flex; flex-direction: column; gap: 0.75rem;"></div>
+        <p class="status" id="certificates-status" style="margin-top: 0.9rem;"></p>
+      </section>
+
+      <section
+        class="card"
+        id="help-section"
+        style="background: #ffffff; color: #111827; border-color: rgba(15,23,42,0.08); box-shadow: var(--shadow); padding: 1.5rem;"
+      >
+        <h2 style="margin-top:0;">Need Help?</h2>
+        <div class="muted" style="color: var(--muted) !important;">Contact the GAD Office for assistance</div>
+        <div style="margin-top: 1rem; display:flex; flex-direction: column; gap: 0.45rem;">
+          <div style="font-weight: 600;">Email:</div>
+          <div style="color: #111827;" id="help-email">gad.office@xu.edu.ph</div>
+          <div style="font-weight: 600; margin-top: 0.25rem;">Phone:</div>
+          <div style="color: #111827;" id="help-phone">(088) 850-4000 loc. 1234</div>
+          <div style="font-weight: 600; margin-top: 0.25rem;">Office Hours:</div>
+          <div style="color: #111827;" id="help-hours">Monday to Friday, 8:00 AM - 5:00 PM</div>
+        </div>
+      </section>
+      </div>
+    </main>
+
+    <!-- Join seminar modal -->
+    <div class="modal-backdrop" id="join-modal-backdrop" role="dialog" aria-modal="true">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="join-modal-title">Join Seminar</h3>
+          <button class="btn secondary" id="join-modal-close" type="button">Cancel</button>
+        </div>
+        <div class="modal-content">
+          <div class="article-meta muted" id="join-modal-meta"></div>
+          <div class="modal-text" id="join-modal-desc" style="white-space: pre-wrap;"></div>
+
+          <div class="join-consents">
+            <label class="join-consent-item">
+              <input type="checkbox" id="join-consent-1" />
+              <span>I agree to participate in this seminar.</span>
+            </label>
+            <label class="join-consent-item">
+              <input type="checkbox" id="join-consent-2" />
+              <span>I consent to GADIMS collecting and storing my personal information for seminar participation and documentation.</span>
+            </label>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap: 0.9rem; margin-top: 1.25rem; align-items:center;">
+            <button class="btn secondary" id="join-modal-cancel" type="button">Cancel</button>
+            <button class="btn" id="join-modal-confirm" type="button" disabled>
+              Confirm / Join
+            </button>
+          </div>
+
+          <p class="status" id="join-modal-status" style="margin-top: 0.9rem;"></p>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/theme.js"></script>
+    <script src="/js/employee-dashboard.js"></script>
+  </body>
+</html>
+
