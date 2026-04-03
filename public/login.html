@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>GADIMS Login</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body class="has-hero-bg">
+    <header class="topbar" id="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/" aria-label="Go to GADIMS home">
+          <div class="brand-badge">XU</div>
+          <div class="brand-title">
+            <strong>GADIMS</strong>
+            <span>Gender and Development MIS</span>
+          </div>
+        </a>
+        <div class="topbar-actions">
+          <span class="theme-emoji" role="button" tabindex="0" data-theme-toggle aria-label="Toggle theme">☾</span>
+          <a class="btn secondary" href="/">Back to home</a>
+        </div>
+      </div>
+    </header>
+
+    <nav class="navbar" id="navbar" aria-label="Primary navigation">
+      <div class="navbar-inner">
+        <span class="nav-section-label">GADIMS</span>
+      </div>
+    </nav>
+
+    <section class="hero hero-magis">
+      <div class="hero-overlay"></div>
+      <div class="hero-inner">
+        <h1>Sign in to GADIMS</h1>
+        <p class="muted">
+          Access your GAD seminars, learning materials, and compliance history using your GADIMS account.
+        </p>
+      </div>
+    </section>
+
+    <main class="container">
+      <div class="grid grid-auth">
+        <section class="card auth-card">
+          <h2>Login</h2>
+          <p class="muted small">
+            Use the email and password you registered with GADIMS. If you need a new account, use your official
+            <strong>@xu.edu.ph</strong> address.
+          </p>
+          <form id="login-form">
+            <label>
+              Email address
+              <input type="email" name="email" autocomplete="username" required />
+            </label>
+            <label>
+              Password
+              <input type="password" name="password" autocomplete="current-password" required />
+            </label>
+            <button class="btn" type="submit">Login</button>
+            <p class="status" id="login-status"></p>
+          </form>
+        </section>
+
+        <section class="card">
+          <h2>New to GADIMS?</h2>
+          <p class="muted">
+            GADIMS is the Gender and Development Management and Information System of Xavier University. Employees can:
+          </p>
+          <ul class="muted">
+            <li>Register for GAD seminars and trainings.</li>
+            <li>Download seminar materials and references.</li>
+            <li>Track their seminar history and compliance.</li>
+          </ul>
+          <p class="muted small" style="margin-top: 0.9rem">
+            To create an account, use your official <strong>@xu.edu.ph</strong> email to request a verification PIN and
+            complete your profile.
+          </p>
+          <a class="btn secondary" href="/signup.html">Create a GADIMS account</a>
+        </section>
+      </div>
+    </main>
+
+    <script src="/js/theme.js"></script>
+    <script src="/js/login.js"></script>
+  </body>
+</html>
+
