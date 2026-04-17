@@ -28,9 +28,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const createSeminarForm = document.getElementById('admin-create-seminar-form');
   const createSeminarStatusEl = document.getElementById('admin-create-seminar-status');
   const createSeminarClearBtn = document.getElementById('admin-create-seminar-clear-btn');
+  const createSeminarModalEl = document.getElementById('admin-create-seminar-modal');
+  const createSeminarCloseBtn = document.getElementById('admin-create-seminar-close');
   const createSeminarDateInput = createSeminarForm?.querySelector('input[name="date"]');
+  const dashboardWrapperEl = document.getElementById('admin-dashboard-wrapper');
+  const seminarsSectionEl = document.getElementById('admin-seminars-section');
+  const createAdminSectionEl = document.getElementById('admin-create-admin-section');
+  const moduleHintEl = document.getElementById('admin-module-hint');
+  const sidebarNavButtons = Array.from(document.querySelectorAll('.dashboard-sidebar-link[data-nav]'));
   const seminarsCarouselEl = document.getElementById('admin-seminars-carousel');
   const seminarsStatusEl = document.getElementById('admin-seminars-status');
+  const seminarsFilterStatusEl = document.getElementById('admin-seminars-filter-status');
+  const seminarsSearchEl = document.getElementById('admin-seminars-search');
+  const seminarsMonthFilterEl = document.getElementById('admin-seminars-month-filter');
+  const seminarsYearFilterEl = document.getElementById('admin-seminars-year-filter');
+  const seminarsClearFiltersBtn = document.getElementById('admin-seminars-clear-filters');
   const seminarsPrevBtn = document.getElementById('admin-seminars-prev-btn');
   const seminarsNextBtn = document.getElementById('admin-seminars-next-btn');
   const seminarEditModalEl = document.getElementById('admin-seminar-edit-modal');
@@ -47,7 +59,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const markAttendanceBtn = document.getElementById('admin-mark-attendance-btn');
   const sendCertificatesBtn = document.getElementById('admin-send-certificates-btn');
   const attendanceSelectAllEl = document.getElementById('admin-attendance-select-all');
-  const newSeminarShortcutBtn = document.getElementById('admin-new-seminar-shortcut');
   const employeeModalEl = document.getElementById('admin-employee-modal');
   const employeeModalCloseBtn = document.getElementById('admin-employee-modal-close');
   const profileNameEl = document.getElementById('admin-employee-profile-name');
@@ -56,6 +67,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const profileDepartmentEl = document.getElementById('admin-employee-profile-department');
   const profilePositionEl = document.getElementById('admin-employee-profile-position');
   const profileStatusEl = document.getElementById('admin-employee-profile-status');
+  const profileReservedCountEl = document.getElementById('admin-employee-profile-reserved-count');
+  const profileTakenCountEl = document.getElementById('admin-employee-profile-taken-count');
+  const profileReservedListEl = document.getElementById('admin-employee-profile-reserved-list');
+  const profileTakenListEl = document.getElementById('admin-employee-profile-taken-list');
+  const profileCertificatesCountEl = document.getElementById('admin-employee-profile-certificates-count');
+  const profileCertificatesListEl = document.getElementById('admin-employee-profile-certificates-list');
+  const profileModalStatusEl = document.getElementById('admin-employee-profile-modal-status');
   const totalEmployeesEl = document.getElementById('admin-total-employees');
   const completionRateEl = document.getElementById('admin-completion-rate');
   const compliantEmployeesEl = document.getElementById('admin-compliant-employees');
@@ -68,12 +86,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const topbarNameEl = document.getElementById('admin-topbar-name');
   const topbarEmailEl = document.getElementById('admin-topbar-email');
   const topbarIdEl = document.getElementById('admin-topbar-id');
+
+  // Pre-registration elements
+  const preRegListEl = document.getElementById('admin-pre-reg-list');
+  const preRegStatusEl = document.getElementById('admin-pre-reg-status');
+  const approveSelectedBtn = document.getElementById('admin-approve-selected-btn');
+  const preRegSelectAllEl = document.getElementById('admin-pre-reg-select-all');
+
   let currentSeminars = [];
+  let seminarFilters = {
+    query: '',
+    month: '',
+    year: '',
+  };
   let attendanceModalState = {
     seminarId: null,
     isHeld: false,
     rows: [],
     attendanceSaved: false,
+    currentTab: 'pre-registered',
   };
 
   const authedFetch = async (url, options = {}) => {
@@ -127,14 +158,319 @@ document.addEventListener('DOMContentLoaded', () => {
       .replaceAll("'", '&#039;');
   };
 
-  const showEmployeeProfile = (row) => {
+  // ========================
+  // MODAL TABS
+  // ========================
+
+  const switchParticipantsTab = (tabName) => {
+    attendanceModalState.currentTab = tabName;
+    document.querySelectorAll('.modal-tab-btn').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.getAttribute('data-modal-tab') === tabName);
+    });
+    document.querySelectorAll('.modal-tab-panel').forEach((panel) => {
+      panel.classList.toggle('is-active', panel.id === `modal-tab-${tabName}`);
+    });
+  };
+
+  document.querySelectorAll('.modal-tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tab = btn.getAttribute('data-modal-tab');
+      if (tab) switchParticipantsTab(tab);
+    });
+  });
+
+  // ========================
+  // PRE-REGISTRATION RENDER
+  // ========================
+
+  const renderPreRegisteredRows = (rows) => {
+    if (!preRegListEl) return;
+    const preRegRows = rows.filter((r) => r.status === 'pre-registered');
+
+    if (!preRegRows.length) {
+      preRegListEl.innerHTML = '<p class="muted">No pending pre-registrations.</p>';
+      if (preRegSelectAllEl) preRegSelectAllEl.disabled = true;
+      return;
+    }
+
+    if (preRegSelectAllEl) preRegSelectAllEl.disabled = false;
+
+    preRegListEl.innerHTML = `
+      <table class="table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="pre-reg-select-all-inner" /></th>
+            <th>Name</th>
+            <th>Department</th>
+            <th>Position</th>
+            <th>Email</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${preRegRows
+            .map(
+              (row) => `
+                <tr>
+                  <td>
+                    <input type="checkbox" class="admin-pre-reg-check" value="${escapeHtml(row.id || '')}" />
+                  </td>
+                  <td>${escapeHtml(row.name || '—')}</td>
+                  <td>${escapeHtml(row.department || '—')}</td>
+                  <td>${escapeHtml(row.position || '—')}</td>
+                  <td>${escapeHtml(row.email || '—')}</td>
+                  <td><span class="badge badge-soft badge-pending">Pending</span></td>
+                </tr>
+              `
+            )
+            .join('')}
+        </tbody>
+      </table>
+    `;
+
+    // Inner select all
+    document.getElementById('pre-reg-select-all-inner')?.addEventListener('change', (e) => {
+      const checked = Boolean(e.target.checked);
+      preRegListEl.querySelectorAll('.admin-pre-reg-check').forEach((cb) => {
+        cb.checked = checked;
+      });
+    });
+  };
+
+  // ========================
+  // APPROVE SELECTED
+  // ========================
+
+  approveSelectedBtn?.addEventListener('click', async () => {
+    if (!attendanceModalState.seminarId || !preRegListEl) return;
+    if (preRegStatusEl) preRegStatusEl.textContent = '';
+
+    const selected = Array.from(preRegListEl.querySelectorAll('.admin-pre-reg-check'))
+      .filter((cb) => cb.checked)
+      .map((cb) => cb.value);
+
+    if (!selected.length) {
+      if (preRegStatusEl) preRegStatusEl.textContent = 'Select at least one participant to approve.';
+      return;
+    }
+
+    try {
+      const res = await authedFetch(`/api/admin/seminars/${attendanceModalState.seminarId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrationIds: selected }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Approval failed');
+      if (preRegStatusEl) preRegStatusEl.textContent = data?.message || `${data.approvedCount || 0} participant(s) approved.`;
+      // Reload the modal
+      const seminar = currentSeminars.find((s) => String(s._id) === String(attendanceModalState.seminarId));
+      if (seminar) await openParticipantsModal(seminar);
+    } catch (err) {
+      if (preRegStatusEl) preRegStatusEl.textContent = err.message || 'Failed to approve participants.';
+    }
+  });
+
+  preRegSelectAllEl?.addEventListener('change', () => {
+    if (!preRegListEl) return;
+    const checked = Boolean(preRegSelectAllEl.checked);
+    preRegListEl.querySelectorAll('.admin-pre-reg-check').forEach((cb) => {
+      cb.checked = checked;
+    });
+  });
+
+  // ========================
+  // ATTENDANCE / PARTICIPANTS
+  // ========================
+
+  const renderEmployeeSeminarsList = (listEl, seminars, emptyMessage) => {
+    if (!listEl) return;
+    if (!Array.isArray(seminars) || seminars.length === 0) {
+      listEl.innerHTML = `<div class="muted small">${escapeHtml(emptyMessage)}</div>`;
+      return;
+    }
+
+    listEl.innerHTML = seminars
+      .map((seminar) => {
+        const datePart = seminar?.date ? formatDate(seminar.date) : 'No date';
+        const timePart = seminar?.startTime ? ` • ${escapeHtml(seminar.startTime)}` : '';
+        return `
+          <div style="padding: 0.4rem 0.5rem; border:1px solid var(--border); border-radius:0.55rem; background:#fff;">
+            <div style="font-weight: 600; color: var(--xu-blue);">${escapeHtml(seminar?.title || 'Untitled seminar')}</div>
+            <div class="muted small" style="margin-top: 0.15rem;">${escapeHtml(datePart)}${timePart}</div>
+          </div>
+        `;
+      })
+      .join('');
+  };
+
+  const renderEmployeeCertificatesList = (employeeId, certificates) => {
+    if (!profileCertificatesListEl) return;
+    if (!Array.isArray(certificates) || certificates.length === 0) {
+      profileCertificatesListEl.innerHTML = '<div class="muted small">No certificates available yet.</div>';
+      return;
+    }
+
+    profileCertificatesListEl.innerHTML = certificates
+      .map((cert) => {
+        const datePart = cert?.date ? formatDate(cert.date) : 'No date';
+        const issuedPart = cert?.certificateIssuedAt ? formatDate(cert.certificateIssuedAt) : 'Not issued';
+        return `
+          <div style="padding: 0.45rem 0.55rem; border:1px solid var(--border); border-radius:0.55rem; background:#fff;">
+            <div style="display:flex; justify-content:space-between; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+              <div>
+                <div style="font-weight:600; color:var(--xu-blue);">${escapeHtml(cert?.title || 'Untitled seminar')}</div>
+                <div class="muted small" style="margin-top:0.12rem;">${escapeHtml(datePart)} • Code: ${escapeHtml(cert?.certificateCode || 'Pending')}</div>
+              </div>
+              <button class="btn secondary" type="button" data-admin-cert-download="${escapeHtml(cert?.registrationId || '')}" style="padding:0.35rem 0.65rem;">Download</button>
+            </div>
+            <div class="muted small" style="margin-top:0.15rem;">Issued: ${escapeHtml(issuedPart)}</div>
+          </div>
+        `;
+      })
+      .join('');
+
+    profileCertificatesListEl.querySelectorAll('[data-admin-cert-download]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const registrationId = button.getAttribute('data-admin-cert-download');
+        if (!registrationId || !employeeId) return;
+        try {
+          const res = await authedFetch(`/api/admin/employees/${employeeId}/certificates/${registrationId}/download`);
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || 'Certificate download failed.');
+          }
+
+          const blob = await res.blob();
+          const disposition = res.headers.get('content-disposition') || '';
+          const match = /filename="?([^";]+)"?/i.exec(disposition);
+          const name = match?.[1] || `GADIMS-Certificate-${registrationId}.png`;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (err) {
+          if (profileModalStatusEl) profileModalStatusEl.textContent = err.message || 'Certificate download failed.';
+        }
+      });
+    });
+  };
+
+  const showEmployeeProfile = async (row) => {
     if (profileNameEl) profileNameEl.textContent = row.name || '—';
     if (profileIdEl) profileIdEl.textContent = row.employeeId || '—';
     if (profileEmailEl) profileEmailEl.textContent = row.email || '—';
     if (profileDepartmentEl) profileDepartmentEl.textContent = row.department || '—';
     if (profilePositionEl) profilePositionEl.textContent = row.position || '—';
     if (profileStatusEl) profileStatusEl.textContent = row.seminarStatus || '—';
+    if (profileReservedCountEl) profileReservedCountEl.textContent = '0';
+    if (profileTakenCountEl) profileTakenCountEl.textContent = '0';
+    if (profileCertificatesCountEl) profileCertificatesCountEl.textContent = '0';
+    renderEmployeeSeminarsList(profileReservedListEl, [], 'Loading reserved seminars...');
+    renderEmployeeSeminarsList(profileTakenListEl, [], 'Loading taken seminars...');
+    renderEmployeeCertificatesList(row.id, []);
+    if (profileModalStatusEl) profileModalStatusEl.textContent = '';
     if (employeeModalEl) employeeModalEl.style.display = 'flex';
+
+    try {
+      const res = await authedFetch(`/api/admin/employees/${row.id}/profile`);
+      const raw = await res.text();
+      let data;
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error('Employee profile details endpoint is unavailable. Please restart the server and try again.');
+      }
+      if (!res.ok) throw new Error(data?.message || 'Failed to load employee profile details');
+
+      const profile = data?.profile || {};
+      const reservedSeminars = Array.isArray(data?.reservedSeminars) ? data.reservedSeminars : [];
+      const takenSeminars = Array.isArray(data?.takenSeminars) ? data.takenSeminars : [];
+      const certificates = Array.isArray(data?.certificates) ? data.certificates : [];
+
+      if (profileNameEl) profileNameEl.textContent = profile.name || row.name || '—';
+      if (profileIdEl) profileIdEl.textContent = profile.employeeId || row.employeeId || '—';
+      if (profileEmailEl) profileEmailEl.textContent = profile.email || row.email || '—';
+      if (profileDepartmentEl) profileDepartmentEl.textContent = profile.department || row.department || '—';
+      if (profilePositionEl) profilePositionEl.textContent = profile.position || row.position || '—';
+      if (profileStatusEl) {
+        const statusLabel = profile.seminarStatus || row.seminarStatus || '—';
+        const completionText = profile.completionText ? ` (${profile.completionText})` : '';
+        profileStatusEl.textContent = `${statusLabel}${completionText}`;
+      }
+
+      if (profileReservedCountEl) profileReservedCountEl.textContent = String(reservedSeminars.length);
+      if (profileTakenCountEl) profileTakenCountEl.textContent = String(takenSeminars.length);
+      if (profileCertificatesCountEl) profileCertificatesCountEl.textContent = String(certificates.length);
+      renderEmployeeSeminarsList(profileReservedListEl, reservedSeminars, 'No reserved seminars yet.');
+      renderEmployeeSeminarsList(profileTakenListEl, takenSeminars, 'No seminars taken yet.');
+      renderEmployeeCertificatesList(row.id, certificates);
+    } catch (err) {
+      if (profileModalStatusEl) {
+        profileModalStatusEl.textContent = err.message || 'Failed to load seminar details.';
+      }
+      renderEmployeeSeminarsList(profileReservedListEl, [], 'Unable to load reserved seminars.');
+      renderEmployeeSeminarsList(profileTakenListEl, [], 'Unable to load seminars taken.');
+      renderEmployeeCertificatesList(row.id, []);
+    }
+  };
+
+  const openCreateSeminarModal = () => {
+    if (!createSeminarModalEl) return;
+    if (createSeminarStatusEl) createSeminarStatusEl.textContent = '';
+    createSeminarModalEl.style.display = 'flex';
+  };
+
+  const closeCreateSeminarModal = () => {
+    if (!createSeminarModalEl) return;
+    createSeminarModalEl.style.display = 'none';
+  };
+
+  const showNavModule = (nav) => {
+    const key = String(nav || 'dashboard').toLowerCase();
+    const isDashboard = key === 'dashboard';
+    const isEmployees = key === 'employees';
+    const isSeminars = key === 'seminars';
+    const isCreateAdmin = key === 'create-admin';
+
+    if (dashboardWrapperEl) {
+      dashboardWrapperEl.style.display = isDashboard || isEmployees ? 'block' : 'none';
+    }
+    if (seminarsSectionEl) {
+      seminarsSectionEl.style.display = isSeminars ? 'block' : 'none';
+    }
+    if (createAdminSectionEl) {
+      createAdminSectionEl.style.display = isCreateAdmin ? 'grid' : 'none';
+    }
+
+    sidebarNavButtons.forEach((btn) => {
+      const btnKey = String(btn.getAttribute('data-nav') || '').toLowerCase();
+      btn.classList.toggle('is-active', btnKey === key);
+    });
+
+    if (moduleHintEl) {
+      const hintMap = {
+        dashboard: 'Current View: Overview',
+        seminars: 'Current View: Manage Seminars',
+        'create-admin': 'Current View: Admin Accounts',
+        employees: 'Current View: Employee Records',
+      };
+      moduleHintEl.textContent = hintMap[key] || 'Current View: Overview';
+    }
+
+    if (isEmployees) {
+      document.getElementById('admin-employees-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    if (!isSeminars) {
+      closeSeminarParticipantsModal();
+    }
   };
 
   const closeEmployeeProfileModal = () => {
@@ -174,6 +510,8 @@ document.addEventListener('DOMContentLoaded', () => {
     seminarEditForm.elements.capacity.value = seminar.capacity || 1;
     seminarEditForm.elements.mandatory.value = seminar.mandatory ? 'true' : 'false';
     seminarEditForm.elements.description.value = seminar.description || '';
+    const editAutoSendCheckbox = document.getElementById('edit-auto-send-cert-checkbox');
+    if (editAutoSendCheckbox) editAutoSendCheckbox.checked = Boolean(seminar.autoSendCertificates);
     const dateInput = seminarEditForm.querySelector('input[name="date"]');
     if (dateInput) dateInput.min = getTodayDateInputValue();
     if (seminarEditStatusEl) seminarEditStatusEl.textContent = '';
@@ -182,8 +520,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const renderParticipantsRows = (rows, isHeld) => {
     if (!seminarParticipantsListEl) return;
-    if (!Array.isArray(rows) || rows.length === 0) {
-      seminarParticipantsListEl.innerHTML = '<p class="muted">No one has registered yet.</p>';
+    // Only show registered/attended/absent (approved) participants
+    const approvedRows = rows.filter((r) => ['registered', 'attended', 'absent'].includes(String(r.status || '').toLowerCase()));
+
+    if (!approvedRows.length) {
+      seminarParticipantsListEl.innerHTML = '<p class="muted">No approved participants found. Approve pre-registered participants first.</p>';
       return;
     }
 
@@ -201,13 +542,13 @@ document.addEventListener('DOMContentLoaded', () => {
             <th>Attend</th>
             <th>Name</th>
             <th>Department</th>
-            <th>Position</th>
             <th>Status</th>
+            <th>Evaluation</th>
             <th>Certificate</th>
           </tr>
         </thead>
         <tbody>
-          ${rows
+          ${approvedRows
             .map(
               (row) => `
                 <tr>
@@ -222,8 +563,14 @@ document.addEventListener('DOMContentLoaded', () => {
                   </td>
                   <td>${escapeHtml(row.name || '—')}</td>
                   <td>${escapeHtml(row.department || '—')}</td>
-                  <td>${escapeHtml(row.position || '—')}</td>
                   <td>${statusBadge(row)}</td>
+                  <td>
+                    ${row.evaluationCompleted
+                      ? '<span class="badge badge-green">Answered</span>'
+                      : row.evaluationAvailable
+                        ? '<span class="badge badge-soft">Not Answered</span>'
+                        : '<span class="badge badge-soft">Not Available</span>'}
+                  </td>
                   <td>${row.certificateIssued ? '<span class="badge badge-green">Sent</span>' : '<span class="badge badge-soft">Not Sent</span>'}</td>
                 </tr>
               `
@@ -240,44 +587,67 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const openParticipantsModal = async (seminar) => {
-    if (!seminarParticipantsModalEl || !seminarParticipantsMetaEl || !seminarParticipantsStatusEl) return;
-    seminarParticipantsMetaEl.textContent = `${seminar.title || 'Seminar'} - ${formatDate(seminar.date)} ${seminar.startTime || ''}`;
-    seminarParticipantsStatusEl.textContent = 'Loading attendance...';
+    if (!seminarParticipantsModalEl || !seminarParticipantsMetaEl) return;
+    seminarParticipantsMetaEl.textContent = `${seminar.title || 'Seminar'} — ${formatDate(seminar.date)} ${seminar.startTime || ''}`;
+    if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = 'Loading...';
+    if (preRegStatusEl) preRegStatusEl.textContent = '';
     if (seminarParticipantsListEl) seminarParticipantsListEl.innerHTML = '';
+    if (preRegListEl) preRegListEl.innerHTML = '';
+
     attendanceModalState = {
       seminarId: seminar._id,
       isHeld: Boolean(seminar.isHeld),
       rows: [],
       attendanceSaved: false,
+      currentTab: 'pre-registered',
     };
+
+    // Start on pre-registered tab
+    switchParticipantsTab('pre-registered');
     seminarParticipantsModalEl.style.display = 'flex';
+
     try {
       const res = await authedFetch(`/api/admin/seminars/${seminar._id}/participants`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || 'Failed to load attendance');
+      if (!res.ok) throw new Error(data?.message || 'Failed to load participants');
+
       const rows = Array.isArray(data?.rows) ? data.rows : [];
       const isHeld = Boolean(data?.seminar?.isHeld);
+      const autoSendCerts = Boolean(data?.seminar?.autoSendCertificates);
+
       attendanceModalState = {
         seminarId: seminar._id,
         isHeld,
         rows,
-        attendanceSaved: rows.some((row) => String(row.status || '').toLowerCase() !== 'registered'),
+        attendanceSaved: rows.some((r) => ['attended', 'absent'].includes(String(r.status || '').toLowerCase())),
+        currentTab: attendanceModalState.currentTab,
       };
+
+      // Render pre-registered tab
+      renderPreRegisteredRows(rows);
+
+      // Render attendance tab
       renderParticipantsRows(rows, isHeld);
+
+      // Update attendance buttons
       if (seminarHeldBtn) {
         seminarHeldBtn.disabled = isHeld;
         seminarHeldBtn.textContent = isHeld ? 'Seminar Already Held' : 'Seminar Held';
       }
       if (markAttendanceBtn) markAttendanceBtn.disabled = !isHeld;
       if (sendCertificatesBtn) sendCertificatesBtn.disabled = !isHeld || !attendanceModalState.attendanceSaved;
-      if (!isHeld) {
-        seminarParticipantsStatusEl.textContent =
-          'Mark this seminar as held first. Before attendance is recorded, participants are treated as absent for completion.';
-      } else {
-        seminarParticipantsStatusEl.textContent = '';
+
+      // Add auto-send cert indicator
+      if (autoSendCerts && seminarParticipantsStatusEl) {
+        seminarParticipantsStatusEl.textContent = 'Auto-send certificates is enabled for this seminar.';
+      } else if (seminarParticipantsStatusEl) {
+        seminarParticipantsStatusEl.textContent = isHeld
+          ? ''
+          : 'Mark this seminar as held first before recording attendance.';
       }
     } catch (err) {
-      seminarParticipantsStatusEl.textContent = err.message || 'Failed to load attendance.';
+      if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = err.message || 'Failed to load participants.';
+      if (preRegStatusEl) preRegStatusEl.textContent = err.message || 'Failed to load participants.';
     }
   };
 
@@ -294,6 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const capacity = Number(seminar.capacity || 0);
         const mandatoryLabel = seminar.mandatory ? 'Mandatory' : 'Optional';
         const heldLabel = seminar.isHeld ? 'Held' : 'Upcoming';
+        const autoSendLabel = seminar.autoSendCertificates ? 'Auto-cert' : '';
         return `
           <article class="card" style="box-shadow:none; padding: 1rem; min-width: 320px; flex: 0 0 320px; display:flex; flex-direction:column; gap: 0.75rem;">
             <div style="display:flex; justify-content: space-between; gap: 0.5rem; align-items:flex-start;">
@@ -304,11 +675,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="muted small">${escapeHtml(formatDate(seminar.date))} - ${escapeHtml(seminar.startTime || '')}</div>
             <div class="muted small">Duration: ${escapeHtml(seminar.durationHours || 0)} hour(s)</div>
             <div class="muted small">Reserved: ${escapeHtml(registeredCount)}/${escapeHtml(capacity)}</div>
-            <div class="muted small">Status: ${escapeHtml(heldLabel)}</div>
+            <div class="muted small">Status: ${escapeHtml(heldLabel)} ${autoSendLabel ? `• <span style="color:#059669;">${escapeHtml(autoSendLabel)}</span>` : ''}</div>
             <div class="muted" style="font-size: 0.92rem; line-height:1.4;">${escapeHtml(seminar.description || '')}</div>
 
             <div style="display:flex; gap: 0.55rem; flex-wrap: wrap; margin-top: auto;">
-              <button class="btn secondary" type="button" data-seminar-view="${seminar._id}">View Attendance</button>
+              <button class="btn secondary" type="button" data-seminar-view="${seminar._id}">View Participants</button>
               <button class="btn secondary" type="button" data-seminar-held="${seminar._id}" ${seminar.isHeld ? 'disabled' : ''}>${seminar.isHeld ? 'Held' : 'Seminar Held'}</button>
               <button class="btn" type="button" data-seminar-edit="${seminar._id}">Edit</button>
               <button class="btn secondary" type="button" data-seminar-delete="${seminar._id}">Delete</button>
@@ -369,6 +740,63 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
+  const populateSeminarYearFilter = (seminars) => {
+    if (!seminarsYearFilterEl) return;
+    const currentValue = seminarsYearFilterEl.value;
+    const years = [...new Set(
+      (Array.isArray(seminars) ? seminars : [])
+        .map((seminar) => {
+          const d = new Date(seminar?.date);
+          return Number.isNaN(d.getTime()) ? null : String(d.getFullYear());
+        })
+        .filter(Boolean)
+    )].sort((a, b) => Number(b) - Number(a));
+
+    seminarsYearFilterEl.innerHTML = ['<option value="">All Years</option>']
+      .concat(years.map((year) => `<option value="${escapeHtml(year)}">${escapeHtml(year)}</option>`))
+      .join('');
+
+    if (currentValue && years.includes(currentValue)) {
+      seminarsYearFilterEl.value = currentValue;
+    }
+  };
+
+  const getFilteredSeminars = () => {
+    const query = String(seminarFilters.query || '').trim().toLowerCase();
+    const month = String(seminarFilters.month || '');
+    const year = String(seminarFilters.year || '');
+
+    return currentSeminars.filter((seminar) => {
+      const title = String(seminar?.title || '').toLowerCase();
+      const description = String(seminar?.description || '').toLowerCase();
+      const date = new Date(seminar?.date);
+      const isValidDate = !Number.isNaN(date.getTime());
+
+      const queryMatch = !query || title.includes(query) || description.includes(query);
+      const monthMatch = !month || (isValidDate && String(date.getMonth()) === month);
+      const yearMatch = !year || (isValidDate && String(date.getFullYear()) === year);
+
+      return queryMatch && monthMatch && yearMatch;
+    });
+  };
+
+  const applySeminarFilters = () => {
+    const filtered = getFilteredSeminars();
+    renderSeminarsCarousel(filtered);
+
+    if (seminarsFilterStatusEl) {
+      const hasFilter = Boolean(
+        String(seminarFilters.query || '').trim() || String(seminarFilters.month || '') || String(seminarFilters.year || '')
+      );
+      seminarsFilterStatusEl.textContent = hasFilter
+        ? `${filtered.length} seminar(s) match your filter.`
+        : '';
+      if (hasFilter && filtered.length === 0) {
+        seminarsFilterStatusEl.textContent = 'No seminars match your filter.';
+      }
+    }
+  };
+
   const loadSeminars = async () => {
     if (seminarsStatusEl) seminarsStatusEl.textContent = '';
     if (seminarsCarouselEl) seminarsCarouselEl.innerHTML = '';
@@ -377,7 +805,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Failed to load seminars');
       currentSeminars = sortSeminarsNearestToFarthest(Array.isArray(data) ? data : []);
-      renderSeminarsCarousel(currentSeminars);
+      populateSeminarYearFilter(currentSeminars);
+      applySeminarFilters();
     } catch (err) {
       if (seminarsStatusEl) seminarsStatusEl.textContent = err.message || 'Failed to load seminars.';
     }
@@ -431,9 +860,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     employeesTableEl.querySelectorAll('[data-employee-profile]').forEach((button) => {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', async () => {
         const row = rows.find((item) => String(item.id) === String(button.getAttribute('data-employee-profile')));
-        if (row) showEmployeeProfile(row);
+        if (row) await showEmployeeProfile(row);
       });
     });
   };
@@ -476,7 +905,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const res = await authedFetch('/api/admin/reports/summary');
     const data = await res.json();
     if (!res.ok) throw new Error(data?.message || 'Failed to load summary');
-
     totalEmployeesEl.textContent = String(data.totalEmployees ?? 0);
     completionRateEl.textContent = `${String(data.completionRatePercent ?? 0)}%`;
     compliantEmployeesEl.textContent = String(data.compliant ?? 0);
@@ -489,18 +917,28 @@ document.addEventListener('DOMContentLoaded', () => {
     window.localStorage.setItem('gadims_role', 'admin');
   };
 
+  // ========================
+  // EVENT LISTENERS
+  // ========================
+
   document.querySelectorAll('[data-scroll-target]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const targetId = btn.getAttribute('data-scroll-target');
       if (!targetId) return;
+      if (targetId === 'admin-create-seminar-card') {
+        openCreateSeminarModal();
+        return;
+      }
       const target = document.getElementById(targetId);
       if (!target) return;
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 
-  newSeminarShortcutBtn?.addEventListener('click', () => {
-    document.getElementById('admin-create-seminar-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  sidebarNavButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      showNavModule(btn.getAttribute('data-nav'));
+    });
   });
 
   seminarsPrevBtn?.addEventListener('click', () => {
@@ -515,6 +953,29 @@ document.addEventListener('DOMContentLoaded', () => {
     seminarsCarouselEl.scrollBy({ left: amount, behavior: 'smooth' });
   });
 
+  seminarsSearchEl?.addEventListener('input', () => {
+    seminarFilters.query = seminarsSearchEl.value || '';
+    applySeminarFilters();
+  });
+
+  seminarsMonthFilterEl?.addEventListener('change', () => {
+    seminarFilters.month = seminarsMonthFilterEl.value || '';
+    applySeminarFilters();
+  });
+
+  seminarsYearFilterEl?.addEventListener('change', () => {
+    seminarFilters.year = seminarsYearFilterEl.value || '';
+    applySeminarFilters();
+  });
+
+  seminarsClearFiltersBtn?.addEventListener('click', () => {
+    seminarFilters = { query: '', month: '', year: '' };
+    if (seminarsSearchEl) seminarsSearchEl.value = '';
+    if (seminarsMonthFilterEl) seminarsMonthFilterEl.value = '';
+    if (seminarsYearFilterEl) seminarsYearFilterEl.value = '';
+    applySeminarFilters();
+  });
+
   if (createSeminarDateInput) {
     createSeminarDateInput.min = getTodayDateInputValue();
   }
@@ -524,11 +985,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (createSeminarStatusEl) createSeminarStatusEl.textContent = '';
   });
 
+  createSeminarCloseBtn?.addEventListener('click', closeCreateSeminarModal);
+  createSeminarModalEl?.addEventListener('click', (event) => {
+    if (event.target === createSeminarModalEl) closeCreateSeminarModal();
+  });
+
   employeeModalCloseBtn?.addEventListener('click', closeEmployeeProfileModal);
   employeeModalEl?.addEventListener('click', (event) => {
-    if (event.target === employeeModalEl) {
-      closeEmployeeProfileModal();
-    }
+    if (event.target === employeeModalEl) closeEmployeeProfileModal();
   });
 
   seminarEditCloseBtn?.addEventListener('click', closeSeminarEditModal);
@@ -554,29 +1018,24 @@ document.addEventListener('DOMContentLoaded', () => {
   seminarHeldBtn?.addEventListener('click', async () => {
     if (!attendanceModalState.seminarId) return;
     try {
-      const res = await authedFetch(`/api/admin/seminars/${attendanceModalState.seminarId}/held`, {
-        method: 'POST',
-      });
+      const res = await authedFetch(`/api/admin/seminars/${attendanceModalState.seminarId}/held`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Failed to mark seminar as held');
-      seminarParticipantsStatusEl.textContent = data?.message || 'Seminar marked as held.';
+      if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = data?.message || 'Seminar marked as held.';
       await loadSeminars();
       const seminar = currentSeminars.find((item) => String(item._id) === String(attendanceModalState.seminarId));
-      if (seminar) {
-        await openParticipantsModal(seminar);
-      }
+      if (seminar) await openParticipantsModal(seminar);
     } catch (err) {
-      seminarParticipantsStatusEl.textContent = err.message || 'Failed to mark seminar as held.';
+      if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = err.message || 'Failed to mark seminar as held.';
     }
   });
 
   markAttendanceBtn?.addEventListener('click', async () => {
-    if (!attendanceModalState.seminarId) return;
-    if (!seminarParticipantsListEl) return;
+    if (!attendanceModalState.seminarId || !seminarParticipantsListEl) return;
 
     const selected = Array.from(seminarParticipantsListEl.querySelectorAll('.admin-attendance-row-check'))
-      .filter((checkbox) => checkbox.checked)
-      .map((checkbox) => checkbox.value);
+      .filter((cb) => cb.checked)
+      .map((cb) => cb.value);
 
     try {
       const res = await authedFetch(`/api/admin/seminars/${attendanceModalState.seminarId}/attendance`, {
@@ -587,32 +1046,32 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Failed to record attendance');
       attendanceModalState.attendanceSaved = true;
-      seminarParticipantsStatusEl.textContent =
-        data?.message || `Attendance updated. Attended: ${data.attendedCount || 0}, Absent: ${data.absentCount || 0}`;
+      if (seminarParticipantsStatusEl) {
+        seminarParticipantsStatusEl.textContent =
+          data?.message || `Attendance updated. Attended: ${data.attendedCount || 0}, Absent: ${data.absentCount || 0}`;
+      }
       await loadSummary();
       await loadSeminars();
       const seminar = currentSeminars.find((item) => String(item._id) === String(attendanceModalState.seminarId));
-      if (seminar) {
-        await openParticipantsModal(seminar);
-      }
+      if (seminar) await openParticipantsModal(seminar);
     } catch (err) {
-      seminarParticipantsStatusEl.textContent = err.message || 'Failed to record attendance.';
+      if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = err.message || 'Failed to record attendance.';
     }
   });
 
   sendCertificatesBtn?.addEventListener('click', async () => {
     if (!attendanceModalState.seminarId || !seminarParticipantsListEl) return;
     const selected = Array.from(seminarParticipantsListEl.querySelectorAll('.admin-attendance-row-check'))
-      .filter((checkbox) => checkbox.checked)
-      .map((checkbox) => checkbox.value);
+      .filter((cb) => cb.checked)
+      .map((cb) => cb.value);
 
     if (!selected.length) {
-      seminarParticipantsStatusEl.textContent = 'Select attended participants first.';
+      if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = 'Select attended participants first.';
       return;
     }
 
     if (!attendanceModalState.attendanceSaved) {
-      seminarParticipantsStatusEl.textContent = 'Save attendance first before sending certificates.';
+      if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = 'Save attendance first before sending certificates.';
       return;
     }
 
@@ -624,14 +1083,14 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Failed to send certificates');
-      seminarParticipantsStatusEl.textContent =
-        data?.message || `Certificates released to ${data.releasedCount || 0} attendee(s).`;
-      const seminar = currentSeminars.find((item) => String(item._id) === String(attendanceModalState.seminarId));
-      if (seminar) {
-        await openParticipantsModal(seminar);
+      if (seminarParticipantsStatusEl) {
+        seminarParticipantsStatusEl.textContent =
+          data?.message || `Certificates released to ${data.releasedCount || 0} attendee(s).`;
       }
+      const seminar = currentSeminars.find((item) => String(item._id) === String(attendanceModalState.seminarId));
+      if (seminar) await openParticipantsModal(seminar);
     } catch (err) {
-      seminarParticipantsStatusEl.textContent = err.message || 'Failed to send certificates.';
+      if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = err.message || 'Failed to send certificates.';
     }
   });
 
@@ -646,7 +1105,8 @@ document.addEventListener('DOMContentLoaded', () => {
   seminarEditForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (seminarEditStatusEl) seminarEditStatusEl.textContent = '';
-    const formBody = Object.fromEntries(new FormData(seminarEditForm).entries());
+    const formData = new FormData(seminarEditForm);
+    const formBody = Object.fromEntries(formData.entries());
     const seminarId = formBody.seminarId;
     const today = getTodayDateInputValue();
     if (!seminarId) return;
@@ -654,6 +1114,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (seminarEditStatusEl) seminarEditStatusEl.textContent = 'Seminar date cannot be in the past.';
       return;
     }
+
+    const editAutoSendCheckbox = document.getElementById('edit-auto-send-cert-checkbox');
+    const autoSendCertificates = editAutoSendCheckbox?.checked ? 'true' : 'false';
 
     try {
       const res = await authedFetch(`/api/admin/seminars/${seminarId}`, {
@@ -667,6 +1130,8 @@ document.addEventListener('DOMContentLoaded', () => {
           durationHours: formBody.durationHours,
           mandatory: formBody.mandatory,
           capacity: formBody.capacity,
+          autoSendCertificates,
+          certificateReleaseMode: autoSendCertificates === 'true' ? 'automatic' : 'evaluation',
         }),
       });
       const data = await res.json();
@@ -701,12 +1166,15 @@ document.addEventListener('DOMContentLoaded', () => {
   createSeminarForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (createSeminarStatusEl) createSeminarStatusEl.textContent = '';
-    const body = Object.fromEntries(new FormData(createSeminarForm).entries());
+    const formData = new FormData(createSeminarForm);
+    const body = Object.fromEntries(formData.entries());
+    const releaseMode = String(body.certificateReleaseMode || 'evaluation').toLowerCase();
+    body.certificateReleaseMode = releaseMode;
+    body.autoSendCertificates = releaseMode === 'automatic' ? 'true' : 'false';
+
     const today = getTodayDateInputValue();
     if (!body.date || String(body.date) < today) {
-      if (createSeminarStatusEl) {
-        createSeminarStatusEl.textContent = 'Seminar date cannot be in the past.';
-      }
+      if (createSeminarStatusEl) createSeminarStatusEl.textContent = 'Seminar date cannot be in the past.';
       return;
     }
     try {
@@ -723,6 +1191,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadSummary();
       await loadDepartmentsAndEmployees();
       await loadSeminars();
+      closeCreateSeminarModal();
     } catch (err) {
       if (createSeminarStatusEl) createSeminarStatusEl.textContent = err.message || 'Seminar creation failed.';
     }
@@ -740,8 +1209,8 @@ document.addEventListener('DOMContentLoaded', () => {
     employeesStatusEl.textContent = '';
     try {
       const selected = Array.from(employeesTableEl.querySelectorAll('.admin-row-check'))
-        .filter((checkbox) => checkbox.checked)
-        .map((checkbox) => checkbox.value);
+        .filter((cb) => cb.checked)
+        .map((cb) => cb.value);
 
       if (selected.length === 0) {
         employeesStatusEl.textContent = 'No employees selected.';
@@ -755,11 +1224,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Notify failed');
-
       employeesStatusEl.textContent =
-        data?.sent !== undefined
-          ? `Emails sent successfully (${data.sent}).`
-          : 'Emails sent successfully.';
+        data?.sent !== undefined ? `Emails sent successfully (${data.sent}).` : 'Emails sent successfully.';
       await loadSummary();
     } catch (err) {
       employeesStatusEl.textContent = err.message || 'Failed to send emails.';
@@ -795,6 +1261,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   setTopbarFromToken();
+  showNavModule('dashboard');
   loadAll().catch((err) => {
     employeesStatusEl.textContent = err.message || 'Failed to load admin dashboard.';
     window.localStorage.removeItem('gadims_employee_token');

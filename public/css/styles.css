@@ -9,7 +9,7 @@
   --text: #111827;
   --muted: #6b7280;
   --border: #e5e7eb;
-  --shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+  --shadow: none;
   --shadow-2: 0 18px 50px rgba(2, 6, 23, 0.12);
   --radius: 1rem; /* 16px */
   --radius-sm: 0.75rem; /* 12px */
@@ -27,7 +27,7 @@ body[data-theme='dark'] {
   --muted: #94a3b8;
   --border: rgba(148, 163, 184, 0.22);
   --header-blue: #050a16;
-  --shadow: 0 8px 20px rgba(2, 6, 23, 0.45);
+  --shadow: none;
   --ring: 0 0 0 3px rgba(96, 165, 250, 0.35);
 }
 
@@ -75,24 +75,25 @@ body.has-hero-bg {
 .wordmark {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   line-height: 1.05;
 }
 
 .wordmark .wordmark-xu {
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Berling Antiqua', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
   font-weight: 600;
   color: #ffffff;
   font-size: 1.1rem;
 }
 
 .wordmark .wordmark-ateneo {
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Berling Antiqua', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  text-transform: none;
+  letter-spacing: 0.03em;
   color: rgba(255, 255, 255, 0.88);
   font-size: 0.9rem;
-  text-align: justify;
+  text-align: left;
 }
 
 .topbar {
@@ -212,11 +213,40 @@ body.has-hero-bg .theme-emoji {
 .topbar-profile-trigger {
   appearance: none;
   border: none;
-  background: transparent;
-  padding: 0;
+  background: none;
+  padding: 0.2rem;
   cursor: pointer;
-  width: 100%;
-  text-align: right;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.topbar-profile-trigger:hover {
+  color: #ffffff;
+}
+
+.notif-bell-btn {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0.2rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 1.2rem;
+  position: relative;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.notif-bell-btn:hover {
+  color: #ffffff;
 }
 
 .theme-toggle-icon {
@@ -493,14 +523,17 @@ body[data-theme='dark'] .stat-box {
 }
 
 .landing-title {
+  font-family: 'Berling Antiqua', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
   color: #ffffff !important;
-  font-size: clamp(4rem, 15vw, 8rem);
+  font-size: clamp(2.7rem, 9.8vw, 5.8rem);
   font-weight: 800;
   letter-spacing: 0.02em;
-  margin-bottom: 0.7rem;
+  line-height: 0.95;
+  margin: 0 0 0.32rem;
 }
 
 .landing-subtitle {
+  display: inline-flex;
   font-weight: 500;
 }
 
@@ -581,7 +614,7 @@ body[data-theme='dark'] textarea {
   color: rgba(226, 232, 240, 0.92);
 }
 
-.hero h1 {
+.hero h1:not(.landing-title) {
   margin: 0;
   font-size: 2.35rem;
   font-weight: 800;
@@ -826,6 +859,20 @@ textarea {
   box-shadow: var(--shadow);
 }
 
+.upcoming-seminars-rail {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  padding: 0.4rem 0.2rem 0.75rem;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+
+.upcoming-seminars-rail .seminar-card {
+  scroll-snap-align: start;
+}
+
 .article-cover {
   width: 100%;
   height: 160px;
@@ -877,6 +924,10 @@ textarea {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.profile-modal {
+  width: min(980px, 100%);
 }
 
 .modal-header {
@@ -1195,6 +1246,92 @@ textarea {
   min-height: 100%;
 }
 
+.joined-seminars-rail {
+  margin-top: 0.55rem;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(280px, 330px);
+  gap: 0.85rem;
+  overflow-x: auto;
+  padding: 0.35rem 0.2rem 0.75rem;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+}
+
+.joined-seminars-rail::-webkit-scrollbar {
+  height: 8px;
+}
+
+.joined-seminars-rail::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.55);
+  border-radius: 999px;
+}
+
+.joined-seminar-card {
+  scroll-snap-align: start;
+  border: 1px solid var(--border);
+  border-radius: 0.95rem;
+  padding: 0.95rem 1rem;
+  background: var(--card-bg);
+  min-height: 188px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.joined-seminar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.joined-seminar-badge {
+  background: rgba(32, 58, 115, 0.08);
+  color: var(--xu-blue);
+  border-color: rgba(32, 58, 115, 0.16);
+}
+
+.joined-seminar-date {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.joined-seminar-title {
+  margin: 0;
+  color: var(--xu-blue);
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.joined-seminar-description {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.joined-seminar-actions {
+  margin-top: auto;
+  padding-top: 0.4rem;
+}
+
+.joined-seminar-download {
+  width: 100%;
+  border-radius: 0.7rem;
+  font-size: 0.88rem;
+  padding: 0.58rem 0.8rem;
+}
+
+.joined-seminar-download:disabled {
+  opacity: 1;
+  color: #64748b;
+  background: #f8fafc;
+  border-color: rgba(148, 163, 184, 0.5);
+  cursor: not-allowed;
+}
+
 .join-seminar-btn {
   margin-top: auto;
 }
@@ -1257,6 +1394,10 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .joined-seminars-rail {
+    grid-auto-columns: minmax(248px, 84vw);
+  }
+
   .hero-highlight {
     margin-top: 1rem;
   }
@@ -1283,7 +1424,7 @@ textarea {
   padding: 1.4rem 1.1rem;
   border-radius: 0.9rem;
   position: sticky;
-  top: 120px; /* below topbar/navbar/hero */
+  top: 84px; /* below topbar */
   align-self: flex-start;
 }
 
@@ -1508,3 +1649,21 @@ textarea {
   }
 }
 
+/* Badge color variants (additional) */
+.badge-pending {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.badge-approved {
+  background: rgba(16, 185, 129, 0.10);
+  color: #059669;
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.badge-attended {
+  background: rgba(32, 58, 115, 0.10);
+  color: var(--xu-blue);
+  border-color: rgba(32, 58, 115, 0.2);
+}

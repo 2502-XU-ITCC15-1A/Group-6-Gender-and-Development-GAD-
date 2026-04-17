@@ -2,9 +2,10 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 
 import PinVerification from '../models/PinVerification.js';
+import PasswordReset from '../models/PasswordReset.js';
 import Employee from '../models/Employee.js';
 import User from '../models/User.js';
-import { sendVerificationPinEmail } from '../services/emailService.js';
+import { sendPasswordResetPinEmail, sendVerificationPinEmail } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -18,6 +19,11 @@ const isValidXUEmail = (email) => {
 
 const generatePin = () => {
   return String(Math.floor(100000 + Math.random() * 900000));
+};
+
+const generateTemporaryPassword = () => {
+  const randomPart = Math.random().toString(36).slice(2, 8);
+  return `Gad-${randomPart}${String(Date.now()).slice(-4)}`;
 };
 
 router.post('/send-pin', async (req, res, next) => {
@@ -44,6 +50,121 @@ router.post('/send-pin', async (req, res, next) => {
     await sendVerificationPinEmail(email, code, expiresAt);
 
     return res.json({ message: 'Verification PIN sent. Please check your email.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/forgot-password/request', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: 'XU email is required.' });
+    }
+    if (!isValidXUEmail(email)) {
+      return res
+        .status(400)
+        .json({ message: 'Only @xu.edu.ph or @my.xu.edu.ph emails are allowed.' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ username: normalizedEmail, role: 'employee' });
+    if (!user) {
+      return res.status(404).json({ message: 'No employee account was found for this email.' });
+    }
+
+    const code = generatePin();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await PasswordReset.create({
+      email: normalizedEmail,
+      code,
+      expiresAt,
+    });
+
+    await sendPasswordResetPinEmail(normalizedEmail, code, expiresAt);
+
+    return res.json({ message: 'Password reset PIN sent. Please check your email.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/forgot-password/verify', async (req, res, next) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Email and PIN are required.' });
+    }
+    if (!isValidXUEmail(email)) {
+      return res
+        .status(400)
+        .json({ message: 'Only @xu.edu.ph or @my.xu.edu.ph emails are allowed.' });
+    }
+
+    const now = new Date();
+    const record = await PasswordReset.findOne({
+      email: email.toLowerCase().trim(),
+      code: String(code).trim(),
+      expiresAt: { $gt: now },
+      usedAt: { $exists: false },
+    }).sort({ createdAt: -1 });
+
+    if (!record) {
+      return res.status(400).json({ message: 'Invalid or expired PIN.' });
+    }
+
+    record.usedAt = new Date();
+    await record.save();
+
+    const token = jwt.sign(
+      {
+        email: email.toLowerCase().trim(),
+        scope: 'password-reset',
+      },
+      process.env.JWT_SECRET || 'gadims-secret',
+      { expiresIn: '10m' }
+    );
+
+    return res.json({ token });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/forgot-password/confirm', async (req, res, next) => {
+  try {
+    const header = req.headers.authorization;
+    if (!header) {
+      return res.status(401).json({ message: 'Missing Authorization header' });
+    }
+    const token = header.replace('Bearer ', '');
+
+    let payload;
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET || 'gadims-secret');
+    } catch {
+      return res.status(401).json({ message: 'Invalid or expired reset token.' });
+    }
+
+    if (payload.scope !== 'password-reset' || !payload.email) {
+      return res.status(403).json({ message: 'Invalid reset scope.' });
+    }
+
+    const { password } = req.body;
+    if (!password || String(password).trim().length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters long.' });
+    }
+
+    const user = await User.findOne({ username: payload.email.toLowerCase().trim(), role: 'employee' });
+    if (!user) {
+      return res.status(404).json({ message: 'Employee account not found.' });
+    }
+
+    await user.setPassword(String(password).trim());
+    await user.save();
+
+    return res.json({ message: 'Password updated successfully.' });
   } catch (err) {
     next(err);
   }

@@ -1,7 +1,9 @@
 import nodemailer from 'nodemailer';
 import Employee from '../models/Employee.js';
 
-const createTransporter = () => {
+let transporterPromise = null;
+
+const createTransporter = async () => {
   const user = String(process.env.GMAIL_USER || '').trim();
   const pass = String(process.env.GMAIL_APP_PASSWORD || '').trim();
   const hasPlaceholderUser = /^your-.*@example\.com$/i.test(user);
@@ -13,18 +15,45 @@ const createTransporter = () => {
     );
   }
 
-  return nodemailer.createTransport({
+  const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user,
       pass,
     },
   });
+
+  await transporter.verify();
+  return transporter;
+};
+
+const getTransporter = async () => {
+  if (!transporterPromise) {
+    transporterPromise = createTransporter().catch((err) => {
+      transporterPromise = null;
+      throw err;
+    });
+  }
+  return transporterPromise;
+};
+
+const sendMailWithRetry = async (mailOptions) => {
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const transporter = await getTransporter();
+      await transporter.sendMail(mailOptions);
+      return;
+    } catch (err) {
+      lastError = err;
+      transporterPromise = null;
+    }
+  }
+
+  throw lastError;
 };
 
 export const sendVerificationPinEmail = async (email, code, expiresAt) => {
-  const transporter = createTransporter();
-
   const mailOptions = {
     from: `"GADIMS" <${process.env.GMAIL_USER}>`,
     to: email,
@@ -35,12 +64,42 @@ This code will expire in 5 minutes (until ${expiresAt.toLocaleTimeString()}).
 `,
   };
 
-  await transporter.sendMail(mailOptions);
+  await sendMailWithRetry(mailOptions);
+};
+
+export const sendPasswordResetPinEmail = async (email, code, expiresAt) => {
+  const mailOptions = {
+    from: `"GADIMS" <${process.env.GMAIL_USER}>`,
+    to: email,
+    subject: 'GADIMS Password Reset PIN',
+    text: `A password reset was requested for your GADIMS account.
+
+Your verification PIN is: ${code}
+
+This code will expire in 10 minutes (until ${expiresAt.toLocaleTimeString()}).
+
+If you did not request this, you can ignore this message.`,
+  };
+
+  await sendMailWithRetry(mailOptions);
+};
+
+export const sendTemporaryPasswordEmail = async (email, tempPassword) => {
+  const mailOptions = {
+    from: `"GADIMS" <${process.env.GMAIL_USER}>`,
+    to: email,
+    subject: 'GADIMS Temporary Password Reset',
+    text: `Your GADIMS password has been reset by an administrator.
+
+Temporary password: ${tempPassword}
+
+Please sign in and change it as soon as possible.`,
+  };
+
+  await sendMailWithRetry(mailOptions);
 };
 
 export const sendReminderEmail = async (employee, remainingCount) => {
-  const transporter = createTransporter();
-
   const mailOptions = {
     from: `"XU GAD Office" <${process.env.GMAIL_USER}>`,
     to: employee.email,
@@ -57,7 +116,7 @@ Thank you,
 Xavier University GAD Office`,
   };
 
-  await transporter.sendMail(mailOptions);
+  await sendMailWithRetry(mailOptions);
 };
 
 export const sendBulkReminders = async () => {

@@ -4,7 +4,63 @@
     <meta charset="UTF-8" />
     <title>GADIMS Admin Dashboard</title>
     <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      /* Participants modal tabs */
+      .modal-tabs {
+        display: flex;
+        gap: 0.35rem;
+        margin-bottom: 0.9rem;
+        border-bottom: 2px solid var(--border);
+        padding-bottom: 0;
+      }
+      .modal-tab-btn {
+        padding: 0.45rem 0.9rem;
+        border: none;
+        background: none;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--muted);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        transition: all 0.15s;
+        border-radius: 0.4rem 0.4rem 0 0;
+      }
+      .modal-tab-btn:hover {
+        color: var(--xu-blue);
+      }
+      .modal-tab-btn.is-active {
+        color: var(--xu-blue);
+        border-bottom-color: var(--xu-blue);
+        background: rgba(32,58,115,0.05);
+      }
+      .modal-tab-panel {
+        display: none;
+      }
+      .modal-tab-panel.is-active {
+        display: block;
+      }
+      .badge-pending {
+        background: rgba(245,158,11,0.12);
+        color: #b45309;
+        border-color: rgba(245,158,11,0.3);
+      }
+      .admin-module-hint {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: var(--xu-blue);
+        background: rgba(32, 58, 115, 0.08);
+        border: 1px solid rgba(32, 58, 115, 0.2);
+        border-radius: 999px;
+        padding: 0.35rem 0.75rem;
+        margin-bottom: 0.95rem;
+      }
+    </style>
   </head>
   <body>
     <header class="topbar">
@@ -15,6 +71,9 @@
             <div class="wordmark" aria-label="Xavier University Ateneo deCagayan">
               <div class="wordmark-xu">XAVIER UNIVERSITY</div>
               <div class="wordmark-ateneo">Ateneo de Cagayan</div>
+            </div>
+            <strong>GADIMS</strong>
+          </div>
         </div>
         <div class="topbar-actions">
           <div class="topbar-user" aria-live="polite">
@@ -27,17 +86,6 @@
         </div>
       </div>
     </header>
-
-    <nav class="navbar" aria-label="Admin navigation">
-      <div class="navbar-inner">
-        <span class="nav-section-label">Admin Console</span>
-        <div class="nav-links">
-          <button class="dashboard-sidebar-link" type="button" data-scroll-target="admin-dashboard-wrapper">Overview</button>
-          <button class="dashboard-sidebar-link" type="button" data-scroll-target="admin-seminars-section">Seminars</button>
-          <button class="dashboard-sidebar-link" type="button" data-scroll-target="admin-employees-table">Employees</button>
-        </div>
-      </div>
-    </nav>
 
     <section class="hero">
       <div class="hero-inner">
@@ -52,19 +100,16 @@
           <h2>Navigation</h2>
           <div class="dashboard-sidebar-nav">
             <button class="dashboard-sidebar-link is-active" type="button" data-nav="dashboard" id="admin-nav-dashboard">
-              Dashboard
-            </button>
-            <button class="dashboard-sidebar-link" type="button" data-nav="seminars" id="admin-nav-seminars">
-              Seminars
-            </button>
-            <button class="dashboard-sidebar-link" type="button" data-nav="create-seminar" id="admin-nav-create-seminar">
-              New Seminar
-            </button>
-            <button class="dashboard-sidebar-link" type="button" data-nav="create-admin" id="admin-nav-create-admin">
-              Create Admin
+              Overview
             </button>
             <button class="dashboard-sidebar-link" type="button" data-nav="employees" id="admin-nav-employees">
-              Employees
+              Employee Records
+            </button>
+            <button class="dashboard-sidebar-link" type="button" data-nav="seminars" id="admin-nav-seminars">
+              Manage Seminars
+            </button>
+            <button class="dashboard-sidebar-link" type="button" data-nav="create-admin" id="admin-nav-create-admin">
+              Admin Accounts
             </button>
           </div>
           <p class="muted small" style="margin-top: 1rem; color: rgba(255,255,255,0.85);">
@@ -73,13 +118,14 @@
         </aside>
 
         <section class="dashboard-main">
+          <div class="admin-module-hint" id="admin-module-hint">Current View: Overview</div>
+
           <div class="card" id="admin-dashboard-wrapper">
             <div class="page-header">
               <div>
                 <h1>Dashboard Overview</h1>
                 <p class="muted">Monitor GAD compliance and employee seminar completion.</p>
               </div>
-              <button class="btn" type="button" id="admin-new-seminar-shortcut">+ New Seminar</button>
             </div>
 
             <div class="stats">
@@ -98,7 +144,7 @@
             </div>
 
             <section class="card" style="margin-top: 1.25rem;">
-              <h2>Seminar Records</h2>
+              <h2>Employee Records</h2>
               <p class="muted">Select employees to send reminders and export reports.</p>
 
               <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
@@ -119,7 +165,6 @@
               </div>
 
               <p class="status" id="admin-employees-status"></p>
-
               <div id="admin-employees-table" style="margin-top: 0.9rem;"></div>
             </section>
           </div>
@@ -128,9 +173,41 @@
             <div style="display:flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap;">
               <div>
                 <h2>Manage Seminars</h2>
-                <p class="muted" style="margin-top:-0.35rem;">Edit, delete, and view reserved participants for each seminar.</p>
+                <p class="muted" style="margin-top:-0.35rem;">Edit, delete, and view participants for each seminar.</p>
               </div>
               <button class="btn" type="button" data-scroll-target="admin-create-seminar-card">+ Create New Seminar</button>
+            </div>
+
+            <div style="display:flex; gap:0.7rem; flex-wrap:wrap; align-items:flex-end; margin-top:0.85rem;">
+              <label style="margin-bottom:0; min-width:220px; flex:1 1 220px;">
+                Search Seminar
+                <input type="text" id="admin-seminars-search" placeholder="Search by title or description" />
+              </label>
+              <label style="margin-bottom:0; min-width:170px;">
+                Month
+                <select id="admin-seminars-month-filter">
+                  <option value="">All Months</option>
+                  <option value="0">January</option>
+                  <option value="1">February</option>
+                  <option value="2">March</option>
+                  <option value="3">April</option>
+                  <option value="4">May</option>
+                  <option value="5">June</option>
+                  <option value="6">July</option>
+                  <option value="7">August</option>
+                  <option value="8">September</option>
+                  <option value="9">October</option>
+                  <option value="10">November</option>
+                  <option value="11">December</option>
+                </select>
+              </label>
+              <label style="margin-bottom:0; min-width:150px;">
+                Year
+                <select id="admin-seminars-year-filter">
+                  <option value="">All Years</option>
+                </select>
+              </label>
+              <button class="btn secondary" id="admin-seminars-clear-filters" type="button">Clear Filters</button>
             </div>
 
             <div style="position: relative; margin-top: 1rem;">
@@ -147,57 +224,11 @@
                 ›
               </button>
             </div>
+            <p class="status" id="admin-seminars-filter-status" style="margin-top:0.4rem;"></p>
             <p class="status" id="admin-seminars-status" style="margin-top: 0.9rem;"></p>
           </section>
 
-          <section class="section-shell" id="admin-create-admin-section">
-            <div class="card" id="admin-create-seminar-card">
-              <div class="page-header">
-                <div>
-                  <h1>Create Seminar</h1>
-                  <p class="muted">Add a new seminar directly from the admin dashboard.</p>
-                </div>
-              </div>
-              <form id="admin-create-seminar-form" class="split-grid">
-                <label>
-                  Title
-                  <input type="text" name="title" required />
-                </label>
-                <label>
-                  Start Time
-                  <input type="time" name="startTime" required />
-                </label>
-                <label>
-                  Date
-                  <input type="date" name="date" required />
-                </label>
-                <label>
-                  Duration (hours)
-                  <input type="number" name="durationHours" min="1" step="1" required />
-                </label>
-                <label>
-                  Capacity
-                  <input type="number" name="capacity" min="1" step="1" required />
-                </label>
-                <label>
-                  Mandatory?
-                  <select name="mandatory">
-                    <option value="false">Optional</option>
-                    <option value="true">Mandatory</option>
-                  </select>
-                </label>
-                <label style="grid-column: 1 / -1;">
-                  Description
-                  <textarea name="description" rows="4" required></textarea>
-                </label>
-                <div style="display:flex; align-items:flex-end; gap: 0.7rem;">
-                  <button class="btn" type="submit">Create Seminar</button>
-                  <button class="btn secondary" id="admin-create-seminar-clear-btn" type="button">Clear</button>
-                </div>
-              </form>
-              <p class="status" id="admin-create-seminar-status"></p>
-            </div>
-
+          <section class="section-shell" id="admin-create-admin-section" style="display:none;">
             <div class="card" id="admin-create-admin-card">
               <div class="page-header">
                 <div>
@@ -225,10 +256,68 @@
               <p class="status" id="admin-create-admin-status"></p>
             </div>
           </section>
+
+          <div class="modal-backdrop" id="admin-create-seminar-modal" role="dialog" aria-modal="true" aria-labelledby="admin-create-seminar-title" style="display:none;">
+            <div class="modal" style="width: min(720px, 100%);">
+              <div class="modal-header">
+                <h3 id="admin-create-seminar-title">Create Seminar</h3>
+                <button class="btn secondary" id="admin-create-seminar-close" type="button" aria-label="Close create seminar modal">Close</button>
+              </div>
+              <div class="modal-content">
+                <p class="muted" style="margin-top:0;">Open the creation form in a focused overlay with the certificate release mode configured up front.</p>
+                <form id="admin-create-seminar-form" class="split-grid">
+                  <label>
+                    Title
+                    <input type="text" name="title" required />
+                  </label>
+                  <label>
+                    Start Time
+                    <input type="time" name="startTime" required />
+                  </label>
+                  <label>
+                    Date
+                    <input type="date" name="date" required />
+                  </label>
+                  <label>
+                    Duration (hours)
+                    <input type="number" name="durationHours" min="1" step="1" required />
+                  </label>
+                  <label>
+                    Capacity
+                    <input type="number" name="capacity" min="1" step="1" required />
+                  </label>
+                  <label>
+                    Mandatory?
+                    <select name="mandatory">
+                      <option value="false">Optional</option>
+                      <option value="true">Mandatory</option>
+                    </select>
+                  </label>
+                  <label>
+                    Certificate Release
+                    <select name="certificateReleaseMode" id="create-certificate-release-mode">
+                      <option value="evaluation" selected>After evaluation is submitted</option>
+                      <option value="automatic">Automatically after attendance</option>
+                    </select>
+                  </label>
+                  <label style="grid-column: 1 / -1;">
+                    Description
+                    <textarea name="description" rows="4" required></textarea>
+                  </label>
+                  <div style="display:flex; align-items:flex-end; gap: 0.7rem;">
+                    <button class="btn" type="submit">Create Seminar</button>
+                    <button class="btn secondary" id="admin-create-seminar-clear-btn" type="button">Clear</button>
+                  </div>
+                </form>
+                <p class="status" id="admin-create-seminar-status"></p>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
     </main>
 
+    <!-- Employee Profile Modal -->
     <div class="modal-backdrop" id="admin-employee-modal" role="dialog" aria-modal="true" aria-labelledby="admin-employee-modal-title">
       <div class="modal" style="width: min(640px, 100%);">
         <div class="modal-header">
@@ -254,10 +343,37 @@
               <div id="admin-employee-profile-status" style="margin-top:0.2rem;">—</div>
             </div>
           </div>
+
+          <div class="split-grid" style="margin-top: 1rem;">
+            <section class="card" style="padding: 0.9rem 1rem; box-shadow:none;">
+              <h4 style="margin:0;">Reserved Seminars (<span id="admin-employee-profile-reserved-count">0</span>)</h4>
+              <div id="admin-employee-profile-reserved-list" class="muted small" style="margin-top:0.55rem; display:grid; gap:0.45rem;">—</div>
+            </section>
+            <section class="card" style="padding: 0.9rem 1rem; box-shadow:none;">
+              <h4 style="margin:0;">Seminars Taken (<span id="admin-employee-profile-taken-count">0</span>)</h4>
+              <div id="admin-employee-profile-taken-list" class="muted small" style="margin-top:0.55rem; display:grid; gap:0.45rem;">—</div>
+            </section>
+          </div>
+
+          <div class="split-grid" style="margin-top: 1rem;">
+            <section class="card" style="padding: 0.9rem 1rem; box-shadow:none;">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                <h4 style="margin:0;">Certificates (<span id="admin-employee-profile-certificates-count">0</span>)</h4>
+              </div>
+              <div id="admin-employee-profile-certificates-list" class="muted small" style="margin-top:0.55rem; display:grid; gap:0.45rem;">—</div>
+            </section>
+            <section class="card" style="padding: 0.9rem 1rem; box-shadow:none;">
+              <h4 style="margin:0;">Certificate Policy</h4>
+              <div class="muted small" style="margin-top:0.55rem;">Certificates are available after evaluation submission unless the seminar is configured for automatic release.</div>
+            </section>
+          </div>
+
+          <p class="status" id="admin-employee-profile-modal-status" style="margin-top: 0.8rem;"></p>
         </div>
       </div>
     </div>
 
+    <!-- Edit Seminar Modal -->
     <div class="modal-backdrop" id="admin-seminar-edit-modal" role="dialog" aria-modal="true" aria-labelledby="admin-seminar-edit-title">
       <div class="modal" style="width: min(720px, 100%);">
         <div class="modal-header">
@@ -298,6 +414,10 @@
               Description
               <textarea name="description" rows="4" required></textarea>
             </label>
+            <label style="grid-column: 1 / -1; display:flex; align-items:center; gap:0.6rem; cursor:pointer;">
+              <input type="checkbox" name="autoSendCertificates" id="edit-auto-send-cert-checkbox" />
+              <span style="font-weight:600;">Automatically Send Certificates to Attendees</span>
+            </label>
             <div style="display:flex; align-items:flex-end; gap: 0.7rem;">
               <button class="btn" type="submit">Save Changes</button>
               <button class="btn secondary" id="admin-seminar-edit-cancel" type="button">Cancel</button>
@@ -308,25 +428,49 @@
       </div>
     </div>
 
+    <!-- Participants / Attendance Modal (with tabs) -->
     <div class="modal-backdrop" id="admin-seminar-participants-modal" role="dialog" aria-modal="true" aria-labelledby="admin-seminar-participants-title">
-      <div class="modal" style="width: min(760px, 100%);">
+      <div class="modal" style="width: min(820px, 100%);">
         <div class="modal-header">
-          <h3 id="admin-seminar-participants-title">Seminar Attendance</h3>
-          <button class="btn secondary" id="admin-seminar-participants-close" type="button" aria-label="Close seminar attendance modal">Close</button>
+          <h3 id="admin-seminar-participants-title">Seminar Management</h3>
+          <button class="btn secondary" id="admin-seminar-participants-close" type="button" aria-label="Close seminar modal">Close</button>
         </div>
         <div class="modal-content">
           <p class="muted" id="admin-seminar-participants-meta" style="margin-top: 0;"></p>
-          <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.8rem;">
-            <button class="btn" id="admin-seminar-held-btn" type="button">Seminar Held</button>
-            <button class="btn secondary" id="admin-mark-attendance-btn" type="button">Save Attendance</button>
-            <button class="btn secondary" id="admin-send-certificates-btn" type="button">Send Certificates</button>
+
+          <!-- Tabs -->
+          <div class="modal-tabs">
+            <button class="modal-tab-btn is-active" data-modal-tab="pre-registered" type="button">Pre-Registered</button>
+            <button class="modal-tab-btn" data-modal-tab="attendance" type="button">📋 Attendance</button>
           </div>
-          <label class="muted small" style="display:inline-flex; align-items:center; gap:0.45rem; margin-bottom:0.55rem;">
-            <input type="checkbox" id="admin-attendance-select-all" />
-            Select all attendees
-          </label>
-          <div id="admin-seminar-participants-list" style="max-height: 52vh; overflow-y: auto;"></div>
-          <p class="status" id="admin-seminar-participants-status"></p>
+
+          <!-- Pre-Registered Tab -->
+          <div class="modal-tab-panel is-active" id="modal-tab-pre-registered">
+            <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.8rem; align-items:center;">
+              <label class="muted small" style="display:inline-flex; align-items:center; gap:0.45rem; margin-bottom:0;">
+                <input type="checkbox" id="admin-pre-reg-select-all" />
+                Select all
+              </label>
+              <button class="btn" id="admin-approve-selected-btn" type="button" style="margin-left:auto;">Approve Selected</button>
+            </div>
+            <div id="admin-pre-reg-list" style="max-height: 52vh; overflow-y: auto;"></div>
+            <p class="status" id="admin-pre-reg-status"></p>
+          </div>
+
+          <!-- Attendance Tab -->
+          <div class="modal-tab-panel" id="modal-tab-attendance">
+            <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.8rem;">
+              <button class="btn" id="admin-seminar-held-btn" type="button">Seminar Held</button>
+              <button class="btn secondary" id="admin-mark-attendance-btn" type="button">Save Attendance</button>
+              <button class="btn secondary" id="admin-send-certificates-btn" type="button">Send Certificates</button>
+            </div>
+            <label class="muted small" style="display:inline-flex; align-items:center; gap:0.45rem; margin-bottom:0.55rem;">
+              <input type="checkbox" id="admin-attendance-select-all" />
+              Select all attendees
+            </label>
+            <div id="admin-seminar-participants-list" style="max-height: 52vh; overflow-y: auto;"></div>
+            <p class="status" id="admin-seminar-participants-status"></p>
+          </div>
         </div>
       </div>
     </div>
@@ -335,4 +479,3 @@
     <script src="/js/admin.js"></script>
   </body>
 </html>
-

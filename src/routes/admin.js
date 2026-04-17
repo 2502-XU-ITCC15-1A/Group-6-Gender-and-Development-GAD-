@@ -7,10 +7,17 @@ import fs from 'fs';
 import Employee from '../models/Employee.js';
 import Seminar from '../models/Seminar.js';
 import Registration from '../models/Registration.js';
+import Notification from '../models/Notification.js';
 import LearningMaterial from '../models/LearningMaterial.js';
 import Article from '../models/Article.js';
+import Evaluation from '../models/Evaluation.js';
 import { sendBulkReminders, sendReminderEmail } from '../services/emailService.js';
 import User from '../models/User.js';
+import {
+  buildCertificateDownload,
+  renderCertificateBuffer,
+  issueCertificateForRegistration,
+} from '../services/certificateService.js';
 
 const router = express.Router();
 
@@ -63,6 +70,12 @@ const parseDateOnly = (value) => {
   const day = Number(match[3]);
   const date = new Date(year, month, day);
   return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const normalizeCertificateReleaseMode = ({ certificateReleaseMode, autoSendCertificates }) => {
+  const mode = String(certificateReleaseMode || '').trim().toLowerCase();
+  if (['manual', 'evaluation', 'automatic'].includes(mode)) return mode;
+  return String(autoSendCertificates).toLowerCase() === 'true' ? 'automatic' : 'evaluation';
 };
 
 router.post('/seed-admin', async (req, res, next) => {
@@ -141,7 +154,7 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-// Dashboard summary (top statistic cards)
+// Dashboard summary
 router.get('/reports/summary', authMiddleware, async (req, res, next) => {
   try {
     const totalEmployees = await Employee.countDocuments();
@@ -178,7 +191,7 @@ router.get('/reports/summary', authMiddleware, async (req, res, next) => {
   }
 });
 
-// Employee table listing for admin dashboard
+// Employee table listing
 router.get('/employees', authMiddleware, async (req, res, next) => {
   try {
     const { department } = req.query;
@@ -202,7 +215,7 @@ router.get('/employees', authMiddleware, async (req, res, next) => {
         position: e.position,
         seminarsAttended: attended,
         requiredSeminarsPerYear: required,
-        seminarStatus: isCompliant ? 'Complete' : 'Non-Complete',
+        seminarStatus: isCompliant ? 'Complete' : 'Incomplete',
         completionText: `${attended}/${required}`,
         updatedAt: e.updatedAt,
       };
@@ -216,7 +229,94 @@ router.get('/employees', authMiddleware, async (req, res, next) => {
   }
 });
 
-// Bulk notify selected employees (email reminders)
+router.get('/employees/:id/profile', authMiddleware, async (req, res, next) => {
+  try {
+    const employee = await Employee.findById(req.params.id)
+      .populate('seminarsAttended', 'title date startTime')
+      .lean();
+
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found.' });
+    }
+
+    const registrations = await Registration.find({ employeeID: employee._id })
+      .populate('seminarID', 'title date startTime')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const reservedSeminars = registrations
+      .filter((r) => ['registered', 'pre-registered'].includes(String(r?.status || '').toLowerCase()))
+      .map((r) => ({
+        id: r?.seminarID?._id?.toString() || '',
+        title: r?.seminarID?.title || 'Untitled seminar',
+        date: r?.seminarID?.date || null,
+        startTime: r?.seminarID?.startTime || '',
+        status: r.status,
+      }));
+
+    const takenFromRegistrations = registrations
+      .filter((r) => String(r?.status || '').toLowerCase() === 'attended')
+      .map((r) => ({
+        id: r?.seminarID?._id?.toString() || '',
+        title: r?.seminarID?.title || 'Untitled seminar',
+        date: r?.seminarID?.date || null,
+        startTime: r?.seminarID?.startTime || '',
+      }));
+
+    const takenSeen = new Set(takenFromRegistrations.map((s) => String(s.id || '')));
+    const takenFromEmployeeRecord = (Array.isArray(employee.seminarsAttended) ? employee.seminarsAttended : [])
+      .map((s) => ({
+        id: s?._id?.toString() || '',
+        title: s?.title || 'Untitled seminar',
+        date: s?.date || null,
+        startTime: s?.startTime || '',
+      }))
+      .filter((s) => {
+        const key = String(s.id || '');
+        if (!key || takenSeen.has(key)) return false;
+        takenSeen.add(key);
+        return true;
+      });
+
+    const takenSeminars = [...takenFromRegistrations, ...takenFromEmployeeRecord];
+    const certificates = registrations
+      .filter((r) => String(r?.status || '').toLowerCase() === 'attended' && r.certificateIssued)
+      .map((r) => ({
+        registrationId: r._id.toString(),
+        seminarId: r.seminarID?._id?.toString() || '',
+        title: r.seminarID?.title || 'Untitled seminar',
+        date: r.seminarID?.date || null,
+        startTime: r.seminarID?.startTime || '',
+        certificateIssued: Boolean(r.certificateIssued),
+        certificateCode: r.certificateCode || '',
+        certificateIssuedAt: r.certificateIssuedAt || r.updatedAt || null,
+        evaluationAvailable: Boolean(r.evaluationAvailable),
+        evaluationCompleted: Boolean(r.evaluationCompleted),
+      }));
+    const attended = takenSeminars.length;
+    const required = Number(employee.requiredSeminarsPerYear || 5);
+
+    res.json({
+      profile: {
+        id: employee._id.toString(),
+        employeeId: makeEmployeeDisplayId(employee._id),
+        name: employee.name || '',
+        email: employee.email || '',
+        department: employee.department || '',
+        position: employee.position || '',
+        seminarStatus: attended >= required ? 'Complete' : 'Incomplete',
+        completionText: `${attended}/${required}`,
+      },
+      reservedSeminars,
+      takenSeminars,
+      certificates,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Bulk notify selected employees
 router.post('/employees/notify', authMiddleware, async (req, res, next) => {
   try {
     const { employeeIds } = req.body;
@@ -249,7 +349,17 @@ router.post('/employees/notify', authMiddleware, async (req, res, next) => {
 
 router.post('/seminars', authMiddleware, async (req, res, next) => {
   try {
-    const { title, description, date, startTime, durationHours, mandatory, capacity } = req.body;
+    const {
+      title,
+      description,
+      date,
+      startTime,
+      durationHours,
+      mandatory,
+      capacity,
+      autoSendCertificates,
+      certificateReleaseMode,
+    } = req.body;
     if (!title || !description || !date || !startTime || !durationHours || !capacity) {
       return res
         .status(400)
@@ -268,6 +378,8 @@ router.post('/seminars', authMiddleware, async (req, res, next) => {
       return res.status(400).json({ message: 'Seminar date cannot be in the past.' });
     }
 
+    const releaseMode = normalizeCertificateReleaseMode({ certificateReleaseMode, autoSendCertificates });
+
     const seminar = await Seminar.create({
       title,
       description,
@@ -276,6 +388,8 @@ router.post('/seminars', authMiddleware, async (req, res, next) => {
       durationHours: Number(durationHours),
       mandatory: String(mandatory).toLowerCase() === 'true',
       capacity: Number(capacity),
+      autoSendCertificates: releaseMode === 'automatic',
+      certificateReleaseMode: releaseMode,
       createdBy: req.user.id,
     });
 
@@ -297,7 +411,7 @@ router.get('/seminars', authMiddleware, async (req, res, next) => {
 router.get('/seminars/:id/participants', authMiddleware, async (req, res, next) => {
   try {
     const seminar = await Seminar.findById(req.params.id)
-      .select('title isHeld heldAt registeredEmployees')
+      .select('title isHeld heldAt registeredEmployees autoSendCertificates certificateReleaseMode')
       .populate('registeredEmployees', 'name department position email');
     if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
 
@@ -317,6 +431,13 @@ router.get('/seminars/:id/participants', authMiddleware, async (req, res, next) 
         email: r.employeeID?.email,
         status: r.status,
         certificateIssued: Boolean(r.certificateIssued),
+        evaluationAvailable: Boolean(r.evaluationAvailable),
+        evaluationCompleted: Boolean(r.evaluationCompleted),
+        evaluationStatus: r.evaluationCompleted
+          ? 'Answered'
+          : r.evaluationAvailable
+            ? 'Not Answered'
+            : 'Not Available',
       });
     });
 
@@ -333,6 +454,9 @@ router.get('/seminars/:id/participants', authMiddleware, async (req, res, next) 
         email: employee.email,
         status: 'registered',
         certificateIssued: false,
+        evaluationAvailable: false,
+        evaluationCompleted: false,
+        evaluationStatus: 'Not Available',
       });
     });
 
@@ -345,9 +469,53 @@ router.get('/seminars/:id/participants', authMiddleware, async (req, res, next) 
         isHeld: Boolean(seminar.isHeld),
         heldAt: seminar.heldAt,
         registeredCount: rows.length,
+        autoSendCertificates: Boolean(seminar.autoSendCertificates),
+        certificateReleaseMode: seminar.certificateReleaseMode || (seminar.autoSendCertificates ? 'automatic' : 'evaluation'),
       },
       rows,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Approve selected pre-registered participants
+router.post('/seminars/:id/approve', authMiddleware, async (req, res, next) => {
+  try {
+    const seminar = await Seminar.findById(req.params.id);
+    if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
+
+    const registrationIds = Array.isArray(req.body?.registrationIds)
+      ? req.body.registrationIds.map((id) => String(id))
+      : [];
+    if (!registrationIds.length) {
+      return res.status(400).json({ message: 'Select at least one participant to approve.' });
+    }
+
+    const registrations = await Registration.find({
+      _id: { $in: registrationIds },
+      seminarID: seminar._id,
+      status: 'pre-registered',
+    }).populate('employeeID', 'name');
+
+    let approvedCount = 0;
+    for (const reg of registrations) {
+      reg.status = 'registered';
+      await reg.save();
+
+      // Create approval notification
+      await Notification.create({
+        employeeID: reg.employeeID._id,
+        type: 'approval',
+        message: `You are officially part of the seminar: "${seminar.title}". You have been approved as an Official Participant.`,
+        seminarID: seminar._id,
+        registrationID: reg._id,
+      });
+
+      approvedCount += 1;
+    }
+
+    res.json({ message: `${approvedCount} participant(s) approved successfully.`, approvedCount });
   } catch (err) {
     next(err);
   }
@@ -383,27 +551,34 @@ router.post('/seminars/:id/attendance', authMiddleware, async (req, res, next) =
       ? req.body.attendedRegistrationIds.map((id) => String(id))
       : [];
 
-    const registrations = await Registration.find({ seminarID: seminar._id });
+    // Only process registered (approved) participants, not pre-registered
+    const registrations = await Registration.find({
+      seminarID: seminar._id,
+      status: { $in: ['registered', 'attended', 'absent'] },
+    });
+
     if (!registrations.length) {
-      return res.json({ message: 'No registered participants found.', attendedCount: 0, absentCount: 0 });
+      return res.json({ message: 'No approved participants found.', attendedCount: 0, absentCount: 0 });
     }
 
     const attendedEmployeeIds = [];
     const absentEmployeeIds = [];
+
     for (const reg of registrations) {
       const isAttended = attendedRegistrationIds.includes(String(reg._id));
       reg.status = isAttended ? 'attended' : 'absent';
-      if (!isAttended) {
-        reg.certificateIssued = false;
-        reg.certificateIssuedAt = undefined;
-      }
-      await reg.save();
 
       if (isAttended) {
+        // Enable evaluation form
+        reg.evaluationAvailable = true;
         attendedEmployeeIds.push(reg.employeeID);
       } else {
+        reg.certificateIssued = false;
+        reg.certificateIssuedAt = undefined;
+        reg.evaluationAvailable = false;
         absentEmployeeIds.push(reg.employeeID);
       }
+      await reg.save();
     }
 
     if (attendedEmployeeIds.length) {
@@ -417,6 +592,30 @@ router.post('/seminars/:id/attendance', authMiddleware, async (req, res, next) =
         { _id: { $in: absentEmployeeIds } },
         { $pull: { seminarsAttended: seminar._id } }
       );
+    }
+
+    // Send evaluation notifications to attendees
+    const attendedRegs = registrations.filter((r) => r.status === 'attended');
+    for (const reg of attendedRegs) {
+      await Notification.create({
+        employeeID: reg.employeeID,
+        type: 'evaluation',
+        message: `An evaluation form is now available for the seminar: "${seminar.title}". Please share your feedback.`,
+        seminarID: seminar._id,
+        registrationID: reg._id,
+      });
+    }
+
+    // Auto-send certificates immediately only when the seminar is configured for it.
+    if (seminar.certificateReleaseMode === 'automatic' && attendedRegs.length > 0) {
+      for (const reg of attendedRegs) {
+        await issueCertificateForRegistration({
+          registration: reg,
+          seminar,
+          employee: { _id: reg.employeeID },
+          Notification,
+        });
+      }
     }
 
     res.json({
@@ -445,18 +644,15 @@ router.post('/seminars/:id/certificates', authMiddleware, async (req, res, next)
       _id: { $in: registrationIds },
       seminarID: seminar._id,
       status: 'attended',
+      evaluationCompleted: true,
     });
 
     let releasedCount = 0;
-    const issuedAt = new Date();
     for (const reg of registrations) {
-      const seminarCode = String(seminar._id).slice(-5).toUpperCase();
-      const employeeCode = String(reg.employeeID).slice(-5).toUpperCase();
-      const randomCode = Math.random().toString(36).slice(2, 6).toUpperCase();
-      reg.certificateIssued = true;
-      reg.certificateIssuedAt = issuedAt;
-      reg.certificateCode = reg.certificateCode || `GAD-${seminarCode}-${employeeCode}-${randomCode}`;
-      await reg.save();
+      const employee = await Employee.findById(reg.employeeID);
+      if (!employee) continue;
+      await issueCertificateForRegistration({ registration: reg, seminar, employee, Notification });
+
       releasedCount += 1;
     }
 
@@ -469,9 +665,53 @@ router.post('/seminars/:id/certificates', authMiddleware, async (req, res, next)
   }
 });
 
+router.get('/employees/:employeeId/certificates/:registrationId/download', authMiddleware, async (req, res, next) => {
+  try {
+    const employee = await Employee.findById(req.params.employeeId);
+    if (!employee) return res.status(404).json({ message: 'Employee not found.' });
+
+    const registration = await Registration.findOne({
+      _id: req.params.registrationId,
+      employeeID: req.params.employeeId,
+      status: 'attended',
+      certificateIssued: true,
+    }).populate('seminarID', 'title date startTime durationHours');
+
+    if (!registration || !registration.seminarID) {
+      return res.status(404).json({ message: 'Certificate not found.' });
+    }
+
+    const download = buildCertificateDownload({
+      employee,
+      registration,
+      seminar: registration.seminarID,
+    });
+    const pngBuffer = await renderCertificateBuffer({ html: download.html });
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="GADIMS-Certificate-${download.fileNameSafe}-${download.certificateCode}.png"`
+    );
+    res.send(pngBuffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.put('/seminars/:id', authMiddleware, async (req, res, next) => {
   try {
-    const { title, description, date, startTime, durationHours, mandatory, capacity } = req.body;
+    const {
+      title,
+      description,
+      date,
+      startTime,
+      durationHours,
+      mandatory,
+      capacity,
+      autoSendCertificates,
+      certificateReleaseMode,
+    } = req.body;
     if (!title || !description || !date || !startTime || !durationHours || !capacity) {
       return res
         .status(400)
@@ -500,6 +740,9 @@ router.put('/seminars/:id', authMiddleware, async (req, res, next) => {
     seminar.durationHours = Number(durationHours);
     seminar.mandatory = String(mandatory).toLowerCase() === 'true';
     seminar.capacity = Number(capacity);
+    const releaseMode = normalizeCertificateReleaseMode({ certificateReleaseMode, autoSendCertificates });
+    seminar.certificateReleaseMode = releaseMode;
+    seminar.autoSendCertificates = releaseMode === 'automatic';
 
     await seminar.save();
     res.json(seminar);
@@ -561,6 +804,7 @@ router.post('/seminars/:id/close', authMiddleware, async (req, res, next) => {
 router.delete('/seminars/:id', authMiddleware, async (req, res, next) => {
   try {
     await Registration.deleteMany({ seminarID: req.params.id });
+    await Notification.deleteMany({ seminarID: req.params.id });
     const seminar = await Seminar.findByIdAndDelete(req.params.id);
     if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
     res.json({ message: 'Seminar deleted' });
@@ -631,6 +875,18 @@ router.post('/notifications/reminders', authMiddleware, async (req, res, next) =
   }
 });
 
+// Get evaluations for a seminar
+router.get('/seminars/:id/evaluations', authMiddleware, async (req, res, next) => {
+  try {
+    const evaluations = await Evaluation.find({ seminarID: req.params.id })
+      .populate('employeeID', 'name department')
+      .sort({ submittedAt: -1 });
+    res.json(evaluations);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/articles', authMiddleware, upload.single('image'), async (req, res, next) => {
   try {
     const { title, content, seminarId, published } = req.body;
@@ -677,4 +933,3 @@ router.delete('/articles/:id', authMiddleware, async (req, res, next) => {
 });
 
 export default router;
-
