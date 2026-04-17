@@ -27,6 +27,15 @@ const SeminarSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Employee',
     },
+    autoSendCertificates: {
+      type: Boolean,
+      default: false,
+    },
+    certificateReleaseMode: {
+      type: String,
+      enum: ['manual', 'evaluation', 'automatic'],
+      default: 'evaluation',
+    },
   },
   { timestamps: { createdAt: true, updatedAt: true } }
 );

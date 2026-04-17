@@ -18,8 +18,8 @@ const RegistrationSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['registered', 'attended', 'absent'],
-      default: 'registered',
+      enum: ['pre-registered', 'registered', 'attended', 'absent'],
+      default: 'pre-registered',
     },
     certificateIssued: {
       type: Boolean,
@@ -31,6 +31,14 @@ const RegistrationSchema = new mongoose.Schema(
     certificateCode: {
       type: String,
       trim: true,
+    },
+    evaluationAvailable: {
+      type: Boolean,
+      default: false,
+    },
+    evaluationCompleted: {
+      type: Boolean,
+      default: false,
     },
   },
   {
