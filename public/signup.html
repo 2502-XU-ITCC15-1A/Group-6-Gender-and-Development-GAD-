@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Create GADIMS Account</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body class="has-hero-bg">
+    <header class="topbar" id="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/" aria-label="Go to GADIMS home">
+          <div class="brand-badge">XU</div>
+          <div class="brand-title">
+            <strong>GADIMS</strong>
+            <span>Gender and Development MIS</span>
+          </div>
+        </a>
+        <div class="topbar-actions">
+          <span class="theme-emoji" role="button" tabindex="0" data-theme-toggle aria-label="Toggle theme">☾</span>
+          <a class="btn secondary" href="/">Already have an account? Login</a>
+        </div>
+      </div>
+    </header>
+
+    <nav class="navbar" id="navbar" aria-label="Primary navigation">
+      <div class="navbar-inner">
+        <span class="nav-section-label">Create GADIMS account</span>
+      </div>
+    </nav>
+
+    <section class="hero hero-magis">
+      <div class="hero-overlay"></div>
+      <div class="hero-inner">
+        <h1>Create your GADIMS account</h1>
+        <p class="muted">
+          Use your official <strong>@xu.edu.ph</strong> or <strong>@my.xu.edu.ph</strong> email address to register. We’ll send a one‑time PIN to verify
+          your email before you complete your profile.
+        </p>
+      </div>
+    </section>
+
+    <main class="container">
+      <section class="card auth-card">
+        <h2>Step 1: Verify your XU email</h2>
+        <p class="muted small">
+          Enter your Xavier Gmail address and request a 6‑digit verification PIN. This code will expire in 5 minutes.
+        </p>
+        <form id="signup-form">
+          <label>
+            XU Email Address
+            <input
+              type="email"
+              id="signup-email"
+              name="email"
+              placeholder="name@xu.edu.ph or name@my.xu.edu.ph"
+              autocomplete="email"
+              required
+            />
+          </label>
+          <div class="row">
+            <button class="btn secondary" id="signup-send-pin-btn" type="button">
+              Send PIN
+            </button>
+            <label>
+              6 digit PIN
+              <input
+                type="text"
+                id="signup-pin"
+                name="pin"
+                placeholder="Enter 6‑digit PIN"
+                maxlength="6"
+                inputmode="numeric"
+                disabled
+              />
+            </label>
+          </div>
+          <div class="row">
+            <button class="btn" id="signup-verify-pin-btn" type="button">Verify PIN</button>
+            <button class="btn secondary" id="signup-resend-pin-btn" type="button">Resend PIN</button>
+          </div>
+          <p class="status" id="signup-email-status"></p>
+          <p class="status" id="signup-pin-status"></p>
+
+          <h2 style="margin-top: 1.5rem">Step 2: Complete your profile</h2>
+          <p class="muted small">
+            After your email is verified, fill in your employee details. All fields marked * are required.
+          </p>
+
+          <label>
+            Full Name *
+            <input type="text" id="signup-full-name" name="fullName" required />
+          </label>
+          <label>
+            Department *
+            <input type="text" id="signup-department" name="department" required />
+          </label>
+          <label>
+            Position / Workforce Role *
+            <input type="text" id="signup-position" name="position" required />
+          </label>
+          <label>
+            Password *
+            <input
+              type="password"
+              id="signup-password"
+              name="password"
+              autocomplete="new-password"
+              required
+            />
+          </label>
+          <div class="row">
+            <label>
+              Assigned Birth Sex *
+              <input type="text" id="signup-birth-sex" name="birthSex" required placeholder="Male or Female" />
+            </label>
+            <label>
+              Gender Identity (optional)
+              <input type="text" id="signup-gender-identity" name="genderIdentity" />
+            </label>
+          </div>
+
+          <div class="row">
+            <button class="btn" id="signup-submit-btn" type="button">
+              Create Account
+            </button>
+            <button class="btn secondary" id="signup-cancel-btn" type="button">
+              Clear form
+            </button>
+          </div>
+          <p class="status" id="signup-complete-status"></p>
+        </form>
+      </section>
+    </main>
+
+    <script src="/js/theme.js"></script>
+    <script src="/js/signup.js"></script>
+  </body>
+</html>
+
