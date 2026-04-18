@@ -35,7 +35,7 @@ The server will be available at http://localhost:4000.
 
 ### Team, please follow these steps to upload your code:
 
-Clone the repo: git clone <url> (if they haven't yet).
+Clone the repo: git clone <url> (if you havent yet).
 
 Move to develop: git checkout develop
 
