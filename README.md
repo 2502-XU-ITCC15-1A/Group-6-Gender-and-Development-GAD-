@@ -1,4 +1,39 @@
-# Group-6-Gender-and-Development-GAD-
+GAD Information Management System
+Group 6
+
+This repository contains the Gender and Development (GAD) Information Management System, featuring a Node.js backend, React frontend, and a Dockerized MongoDB database.
+
+🛠 Project Structure
+We follow a Flat Directory Structure for seamless integration and deployment:
+/src - Backend server logic, API routes, and database configuration.
+/public - Frontend assets and static files.
+Dockerfile & docker-compose.yml - Infrastructure configuration.
+package.json - Project dependencies and scripts.
+
+🚀 Getting Started
+1. Prerequisites
+   Node.js (v18 or higher)
+   Docker Desktop
+
+2. Infrastructure Setup (Docker)
+To start the database environment, run:
+docker-compose up -d
+This starts the MongoDB container on port 27017.
+
+3. Application SetupInstall dependencies and start the development server:
+npm install
+npm start
+The server will be available at http://localhost:4000.
+
+Branching Strategy
+We follow a strict Promotion Pipeline to ensure code stability:
+Branch          Purpose
+main            Production: Clean, tested, and ready for submission.
+staging         Pre-release: Final integration testing environment.
+develop         Integration: The main workspace for combining features.
+feature/*       Development: Temporary branches for specific tasks.
+
+
 
 Team, please follow these steps to upload your code:
 
