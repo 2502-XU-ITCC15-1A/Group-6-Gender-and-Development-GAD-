@@ -5,7 +5,7 @@ This repository contains the **Gender and Development (GAD) Information Manageme
 
 ---
 
-## 🛠 Project Structure
+### 🛠 Project Structure
 We follow a **Flat Directory Structure** for seamless integration and deployment. This ensures the application is ready for production environments.
 
 * 📂 **`/src`** — Backend server logic, API routes, and database configuration.
@@ -15,7 +15,7 @@ We follow a **Flat Directory Structure** for seamless integration and deployment
 
 ---
 
-## 🚀 Getting Started
+### 🚀 Getting Started
 
 ### 1. Prerequisites
 * **Node.js** (v18 or higher)
