@@ -1,5 +1,5 @@
-# 🏛️ GAD Information Management System
-### **Group 6 | Junior Final Project**
+##  GAD Information Management System
+### **Group 6**
 
 This repository contains the **Gender and Development (GAD) Information Management System**, featuring a Node.js backend, React frontend, and a Dockerized MongoDB database.
 
@@ -35,7 +35,7 @@ The server will be available at http://localhost:4000.
 
 
 
-###Team, please follow these steps to upload your code:
+### Team, please follow these steps to upload your code:
 
 Clone the repo: git clone <url> (if they haven't yet).
 
