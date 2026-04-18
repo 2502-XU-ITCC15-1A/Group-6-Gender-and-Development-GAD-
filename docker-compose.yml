@@ -1,0 +1,31 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: magis_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - magis_mongo_data:/data/db
+
+  app:
+    build: .
+    container_name: magis_app
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: "4000"
+      MONGO_URI: "mongodb://mongo:27017/magis_gad"
+      JWT_SECRET: "change-this-secret"
+      # Set these in a local .env if you want Sheets + Gmail enabled
+      GMAIL_USER: "${GMAIL_USER}"
+      GMAIL_APP_PASSWORD: "${GMAIL_APP_PASSWORD}"
+      GOOGLE_SERVICE_ACCOUNT_JSON: "${GOOGLE_SERVICE_ACCOUNT_JSON}"
+      GOOGLE_SHEET_RANGE: "${GOOGLE_SHEET_RANGE}"
+    depends_on:
+      - mongo
+
+volumes:
+  magis_mongo_data:
+
