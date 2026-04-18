@@ -26,7 +26,7 @@ docker-compose up -d
 
 This starts the MongoDB container on port 27017.
 
-### Application SetupInstall dependencies and start the development server:
+### Application Setup Install dependencies and start the development server:
 npm install
 npm start
 The server will be available at http://localhost:4000.
