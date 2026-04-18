@@ -52,3 +52,30 @@ git add .
 git commit -m "Finished [feature name]"
 
 git push origin feature/your-name-feature
+# 🏛️ GAD Information Management System
+### **Group 6 | Junior Final Project**
+
+This repository contains the **Gender and Development (GAD) Information Management System**, featuring a Node.js backend, React frontend, and a Dockerized MongoDB database.
+
+---
+
+## 🛠 Project Structure
+We follow a **Flat Directory Structure** for seamless integration and deployment. This ensures the application is ready for production environments.
+
+* 📂 **`/src`** — Backend server logic, API routes, and database configuration.
+* 📂 **`/public`** — Frontend assets and static files.
+* 🐳 **`Dockerfile` & `docker-compose.yml`** — Infrastructure as Code for environment setup.
+* 📦 **`package.json`** — Project dependencies and build scripts.
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+* **Node.js** (v18 or higher)
+* **Docker Desktop** (for database containerization)
+
+### 2. Infrastructure Setup (Docker)
+To start the database environment, run the following in your terminal:
+```bash
+docker-compose up -d
