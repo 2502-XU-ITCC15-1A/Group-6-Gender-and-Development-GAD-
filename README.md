@@ -27,11 +27,11 @@ The server will be available at http://localhost:4000.
 
 Branching Strategy
 We follow a strict Promotion Pipeline to ensure code stability:
-Branch          Purpose
-main            Production: Clean, tested, and ready for submission.
-staging         Pre-release: Final integration testing environment.
-develop         Integration: The main workspace for combining features.
-feature/*       Development: Temporary branches for specific tasks.
+Branch,Purpose
+main,"Production: Clean, tested, and ready for submission."
+staging,Pre-release: Final integration testing environment.
+develop,Integration: The main workspace for combining features.
+feature/*,Development: Temporary branches for specific tasks.
 
 
 
