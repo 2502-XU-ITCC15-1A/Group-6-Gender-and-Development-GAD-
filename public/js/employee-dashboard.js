@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   /** @type {string|null} */
-  let token = window.localStorage.getItem('gadims_employee_token');
-  const savedRole = window.localStorage.getItem('gadims_role');
+  let token = window.localStorage.getItem('gims_employee_token');
+  const savedRole = window.localStorage.getItem('gims_role');
 
   if (!token) {
     window.location.href = '/';
@@ -60,6 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
     joinTitle: document.getElementById('join-modal-title'),
     joinMeta: document.getElementById('join-modal-meta'),
     joinDesc: document.getElementById('join-modal-desc'),
+    joinSessionPicker: document.getElementById('join-modal-session-picker'),
     joinConsent1: document.getElementById('join-consent-1'),
     joinConsent2: document.getElementById('join-consent-2'),
     joinConfirmBtn: document.getElementById('join-modal-confirm'),
@@ -93,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentEmployeeId = null;
   let currentSeminars = [];
   let currentEvalRegistrationId = null;
+  let currentChosenSessionId = null;
 
   const authedFetch = async (url, options = {}) => {
     if (!token) throw new Error('Not authenticated');
@@ -113,6 +115,17 @@ document.addEventListener('DOMContentLoaded', () => {
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#039;');
+  };
+
+  const formatTime = (value) => {
+    if (!value) return '';
+    const match = /^(\d{1,2}):(\d{2})$/.exec(String(value).trim());
+    if (!match) return String(value);
+    let hours = Number(match[1]);
+    const minutes = match[2];
+    const period = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    return `${hours}:${minutes} ${period}`;
   };
 
   const formatSeminarDate = (date) => {
@@ -154,6 +167,45 @@ document.addEventListener('DOMContentLoaded', () => {
     seminar_update: '<i class="fa-solid fa-bookmark" style="color:var(--xu-blue);"></i>',
   };
 
+  const navigateFromNotification = (type, registrationId, seminarId) => {
+    el.notifDropdown?.classList.remove('is-open');
+
+    if (type === 'evaluation' && registrationId) {
+      const target = document.getElementById('attended-section');
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Delay slightly so scroll settles, then trigger the eval modal for this registration
+      setTimeout(() => {
+        const evalBtn = el.attendedSeminarsList?.querySelector(`button[data-open-eval="${CSS.escape(registrationId)}"]`);
+        if (evalBtn && !evalBtn.disabled) {
+          evalBtn.click();
+        } else {
+          // Fallback: just scroll, the button may be disabled if already submitted
+          const target2 = document.getElementById('attended-section');
+          if (target2) target2.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 400);
+      return;
+    }
+
+    if (type === 'certificate') {
+      const target = document.getElementById('attended-section');
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+
+    if (type === 'approval') {
+      const target = document.getElementById('upcoming-section');
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+
+    if (type === 'seminar_update') {
+      const target = document.getElementById('upcoming-section');
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+  };
+
   const renderNotifications = (notifications) => {
     if (!el.notifList) return;
     if (!Array.isArray(notifications) || notifications.length === 0) {
@@ -163,7 +215,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     el.notifList.innerHTML = notifications
       .map((n) => `
-        <div class="notif-item ${n.read ? '' : 'unread'}" data-notif-id="${escapeHtml(n._id)}">
+        <div class="notif-item ${n.read ? '' : 'unread'}"
+          data-notif-id="${escapeHtml(String(n._id || ''))}"
+          data-notif-type="${escapeHtml(String(n.type || ''))}"
+          data-notif-registration-id="${escapeHtml(String(n.registrationID || ''))}"
+          data-notif-seminar-id="${escapeHtml(String(n.seminarID || ''))}"
+          style="cursor:pointer;"
+          title="Click to go to this notification's source"
+        >
           <span class="notif-icon">${notifIconMap[n.type] || '<i class="fa-solid fa-bell"></i>'}</span>
           <div class="notif-item-body">
             <div class="notif-item-msg">${escapeHtml(n.message)}</div>
@@ -174,19 +233,26 @@ document.addEventListener('DOMContentLoaded', () => {
       `)
       .join('');
 
-    // Click to mark as read
+    // Click: mark as read then navigate to source
     el.notifList.querySelectorAll('.notif-item').forEach((item) => {
       item.addEventListener('click', async () => {
         const notifId = item.getAttribute('data-notif-id');
-        if (!notifId || item.classList.contains('read-marked')) return;
-        item.classList.remove('unread');
-        item.classList.add('read-marked');
-        const dotEl = item.querySelector('.notif-dot');
-        if (dotEl) dotEl.remove();
-        try {
-          await authedFetch(`/api/employee/notifications/${notifId}/read`, { method: 'PUT' });
-          await loadNotifications();
-        } catch {}
+        const notifType = item.getAttribute('data-notif-type');
+        const registrationId = item.getAttribute('data-notif-registration-id');
+        const seminarId = item.getAttribute('data-notif-seminar-id');
+
+        if (notifId && !item.classList.contains('read-marked')) {
+          item.classList.remove('unread');
+          item.classList.add('read-marked');
+          const dotEl = item.querySelector('.notif-dot');
+          if (dotEl) dotEl.remove();
+          try {
+            await authedFetch(`/api/employee/notifications/${notifId}/read`, { method: 'PUT' });
+            await loadNotifications();
+          } catch {}
+        }
+
+        navigateFromNotification(notifType, registrationId, seminarId);
       });
     });
   };
@@ -319,61 +385,145 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const cards = upcomingSeminars.map((s) => {
-      const mandatoryLabel = s.mandatory ? 'Mandatory' : 'Optional';
-      const shortDesc = truncate(s.description, 110);
-      const capacity = Number(s.capacity || 0);
-      const remaining = Number(s.remainingCapacity || 0);
-      const joined = Math.max(0, capacity - remaining);
+    const cards = [];
 
-      return `
-        <div class="card seminar-card" style="box-shadow:none; padding: 1rem; min-width: 290px; flex: 0 0 290px; display:flex; flex-direction:column; justify-content:space-between;">
-          <div style="display:flex; align-items:flex-start; gap: 0.8rem;">
-            <div style="width:36px; height:36px; border-radius:10px; background: rgba(32,58,115,0.12); display:flex; align-items:center; justify-content:center; color: var(--xu-blue);">
-              <i class="fa-solid fa-chalkboard-user"></i>
+    upcomingSeminars.forEach((s) => {
+      const isPickOne = s.multiSessionType === 'pick-one';
+      const hasMultiSessions = Array.isArray(s.sessions) && s.sessions.length > 1;
+
+      if (isPickOne && hasMultiSessions) {
+        // Explode into one card per session — same seminar info, each session is its own card
+        const seriesFirst = formatSeminarDate(s.sessions[0].date);
+        const seriesLast = formatSeminarDate(s.sessions[s.sessions.length - 1].date);
+        const seriesRange = `${seriesFirst} – ${seriesLast}`;
+
+        s.sessions.forEach((sess, idx) => {
+          const mandatoryLabel = s.mandatory ? 'Mandatory' : 'Optional';
+          const shortDesc = truncate(s.description, 110);
+          const capacity = Number(s.capacity || 0);
+          const remaining = Number(s.remainingCapacity || 0);
+          const joined = Math.max(0, capacity - remaining);
+          const sessionId = String(sess._id || sess.id || '');
+          const dayLabel = `Day ${idx + 1} of ${s.sessions.length}`;
+
+          cards.push(`
+            <div class="card seminar-card" style="box-shadow:none; padding: 1rem; min-width: 290px; flex: 0 0 290px; display:flex; flex-direction:column; justify-content:space-between;">
+              <div style="display:flex; align-items:flex-start; gap: 0.8rem;">
+                <div style="width:36px; height:36px; border-radius:10px; background: rgba(32,58,115,0.12); display:flex; align-items:center; justify-content:center; color: var(--xu-blue);">
+                  <i class="fa-solid fa-chalkboard-user"></i>
+                </div>
+                <div style="flex:1;">
+                  <div style="font-weight:600; color: var(--xu-blue);">${escapeHtml(s.title)}</div>
+                  <div class="muted small" style="margin-top:0.2rem; font-size:0.83rem; font-weight:600; color:var(--text);">
+                    ${escapeHtml(formatSeminarDate(sess.date))} &bull; ${escapeHtml(formatTime(sess.startTime))}
+                  </div>
+                  <div class="muted small" style="font-size:0.78rem; margin-top:0.1rem; opacity:0.72;">
+                    <i class="fa-solid fa-calendar-days" style="margin-right:0.25rem;"></i>Series: ${escapeHtml(seriesRange)}
+                  </div>
+                </div>
+              </div>
+
+              <div class="muted" style="margin-top: 0.7rem; font-size:0.92rem; line-height:1.4;">
+                ${escapeHtml(shortDesc)}
+              </div>
+
+              <div style="margin-top: 0.75rem; display:flex; justify-content: space-between; align-items:center; gap: 0.75rem;">
+                <div style="display:flex; flex-wrap:wrap; gap:0.3rem; align-items:center;">
+                  <div class="badge badge-soft" style="background: rgba(32,58,115,0.08); color: var(--xu-blue); border-color: rgba(32,58,115,0.18);">
+                    ${escapeHtml(mandatoryLabel)}
+                  </div>
+                  <div class="badge badge-soft" style="background:rgba(79,70,229,0.08); color:#4338ca; border-color:rgba(79,70,229,0.2);">
+                    ${escapeHtml(dayLabel)}
+                  </div>
+                </div>
+                <div class="muted small" style="font-size:0.82rem;">
+                  Slots: ${escapeHtml(String(joined))}/${escapeHtml(String(capacity))}
+                </div>
+              </div>
+
+              <button class="btn pre-register-btn" style="margin-top: 0.9rem; width: 100%;"
+                data-join-id="${escapeHtml(s.id)}"
+                data-session-id="${escapeHtml(sessionId)}"
+                type="button">
+                Pre-Register for ${escapeHtml(formatSeminarDate(sess.date))}
+              </button>
             </div>
-            <div style="flex:1;">
-              <div style="font-weight:600; color: var(--xu-blue);">
-                ${escapeHtml(s.title)}
+          `);
+        });
+      } else {
+        // Single-day or attend-all multi-day — one card
+        const mandatoryLabel = s.mandatory ? 'Mandatory' : 'Optional';
+        const shortDesc = truncate(s.description, 110);
+        const capacity = Number(s.capacity || 0);
+        const remaining = Number(s.remainingCapacity || 0);
+        const joined = Math.max(0, capacity - remaining);
+        const isAll = s.multiSessionType === 'all';
+        const allHasMulti = Array.isArray(s.sessions) && s.sessions.length > 1;
+
+        let dateDisplay = `${escapeHtml(formatSeminarDate(s.date))} &bull; ${escapeHtml(formatTime(s.startTime))}`;
+        let seriesLine = '';
+        let multiDayBadge = '';
+        if (isAll && allHasMulti) {
+          const first = formatSeminarDate(s.sessions[0].date);
+          const last = formatSeminarDate(s.sessions[s.sessions.length - 1].date);
+          dateDisplay = `${escapeHtml(first)} – ${escapeHtml(last)}`;
+          seriesLine = `<div class="muted small" style="font-size:0.78rem; margin-top:0.1rem; opacity:0.72;">All ${s.sessions.length} sessions required &bull; starts ${escapeHtml(formatTime(s.sessions[0].startTime))}</div>`;
+          multiDayBadge = `<div class="badge badge-soft" style="background:rgba(79,70,229,0.08); color:#4338ca; border-color:rgba(79,70,229,0.2);">Multi-Day</div>`;
+        }
+
+        cards.push(`
+          <div class="card seminar-card" style="box-shadow:none; padding: 1rem; min-width: 290px; flex: 0 0 290px; display:flex; flex-direction:column; justify-content:space-between;">
+            <div style="display:flex; align-items:flex-start; gap: 0.8rem;">
+              <div style="width:36px; height:36px; border-radius:10px; background: rgba(32,58,115,0.12); display:flex; align-items:center; justify-content:center; color: var(--xu-blue);">
+                <i class="fa-solid fa-chalkboard-user"></i>
               </div>
-              <div class="muted small" style="margin-top:0.25rem; font-size:0.82rem;">
-                ${escapeHtml(formatSeminarDate(s.date))} • ${escapeHtml(s.startTime || '')}
-              </div>
-              <div class="muted small" style="font-size:0.82rem; margin-top:0.25rem;">
-                Instructor: ${escapeHtml(s.instructorName || 'GAD Office')}
+              <div style="flex:1;">
+                <div style="font-weight:600; color: var(--xu-blue);">${escapeHtml(s.title)}</div>
+                <div class="muted small" style="margin-top:0.2rem; font-size:0.83rem;">${dateDisplay}</div>
+                ${seriesLine}
               </div>
             </div>
+
+            <div class="muted" style="margin-top: 0.7rem; font-size:0.92rem; line-height:1.4;">
+              ${escapeHtml(shortDesc)}
+            </div>
+
+            <div style="margin-top: 0.75rem; display:flex; justify-content: space-between; align-items:center; gap: 0.75rem;">
+              <div style="display:flex; flex-wrap:wrap; gap:0.3rem; align-items:center;">
+                <div class="badge badge-soft" style="background: rgba(32,58,115,0.08); color: var(--xu-blue); border-color: rgba(32,58,115,0.18);">
+                  ${escapeHtml(mandatoryLabel)}
+                </div>
+                ${multiDayBadge}
+              </div>
+              <div class="muted small" style="font-size:0.82rem;">
+                Slots: ${escapeHtml(String(joined))}/${escapeHtml(String(capacity))}
+              </div>
+            </div>
+
+            <button class="btn pre-register-btn" style="margin-top: 0.9rem; width: 100%;" data-join-id="${escapeHtml(s.id)}" type="button">
+              Pre-Register
+            </button>
           </div>
-
-          <div class="muted" style="margin-top: 0.75rem; font-size:0.92rem; line-height:1.4;">
-            ${escapeHtml(shortDesc)}
-          </div>
-
-          <div style="margin-top: 0.75rem; display:flex; justify-content: space-between; align-items:center; gap: 0.75rem;">
-            <div>
-              <div class="badge badge-soft" style="background: rgba(32,58,115,0.08); color: var(--xu-blue); border-color: rgba(32,58,115,0.18);">
-                ${escapeHtml(mandatoryLabel)}
-              </div>
-            </div>
-            <div class="muted small" style="font-size:0.82rem;">
-              Slots: ${escapeHtml(joined)}/${escapeHtml(capacity)}
-            </div>
-          </div>
-
-          <button class="btn pre-register-btn" style="margin-top: 0.9rem; width: 100%;" data-join-id="${escapeHtml(s.id)}" type="button">
-            Pre-Register
-          </button>
-        </div>
-      `;
+        `);
+      }
     });
 
     el.upcomingCarousel.innerHTML = cards.join('');
-    el.upcomingCarousel.querySelectorAll('button[data-join-id]').forEach((btn) => {
+    el.upcomingCarousel.querySelectorAll('button[data-join-id]:not([data-session-id])').forEach((btn) => {
       btn.addEventListener('click', () => {
         const seminarId = btn.getAttribute('data-join-id');
         const seminar = upcomingSeminars.find((x) => String(x.id) === String(seminarId));
         if (!seminar) return;
         openJoinModal({ seminar, joinActionId: seminarId });
+      });
+    });
+    el.upcomingCarousel.querySelectorAll('button[data-session-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const seminarId = btn.getAttribute('data-join-id');
+        const sessionId = btn.getAttribute('data-session-id');
+        const seminar = upcomingSeminars.find((x) => String(x.id) === String(seminarId));
+        if (!seminar) return;
+        openJoinModal({ seminar, joinActionId: seminarId, chosenSessionId: sessionId });
       });
     });
   };
@@ -393,6 +543,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const cards = preRegistered.map((r) => {
       const s = r.seminar;
+      const chosenSess = r.chosenSessionId && Array.isArray(s.sessions)
+        ? s.sessions.find((sess) => String(sess._id || sess.id || '') === String(r.chosenSessionId))
+        : null;
+      const displayDate = chosenSess
+        ? `${escapeHtml(formatSeminarDate(chosenSess.date))} &bull; ${escapeHtml(formatTime(chosenSess.startTime))}`
+        : `${escapeHtml(formatSeminarDate(s.date))} &bull; ${escapeHtml(formatTime(s.startTime))}`;
+      const chosenIdx = chosenSess && Array.isArray(s.sessions) ? s.sessions.indexOf(chosenSess) : -1;
+      const dayBadge = chosenSess && s.sessions?.length > 1
+        ? `<div class="badge badge-soft" style="background:rgba(79,70,229,0.08); color:#4338ca; border-color:rgba(79,70,229,0.2); margin-left:0.35rem;">Day ${chosenIdx + 1} of ${s.sessions.length}</div>`
+        : '';
+
       return `
         <div class="card seminar-card" style="box-shadow:none; padding: 1rem; min-width: 290px; flex: 0 0 290px; display:flex; flex-direction:column; justify-content:space-between; border-color: rgba(245,158,11,0.3);">
           <div style="display:flex; align-items:flex-start; gap: 0.8rem;">
@@ -403,9 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div style="font-weight:600; color: var(--xu-blue);">
                 ${escapeHtml(s.title)}
               </div>
-              <div class="muted small" style="margin-top:0.25rem; font-size:0.82rem;">
-                ${escapeHtml(formatSeminarDate(s.date))} • ${escapeHtml(s.startTime || '')}
-              </div>
+              <div class="muted small" style="margin-top:0.25rem; font-size:0.82rem;">${displayDate}</div>
             </div>
           </div>
 
@@ -413,10 +572,9 @@ document.addEventListener('DOMContentLoaded', () => {
             ${escapeHtml(truncate(s.description, 100))}
           </div>
 
-          <div style="margin-top: 0.75rem;">
-            <span class="badge badge-soft badge-pending">
-              Pending Approval
-            </span>
+          <div style="margin-top: 0.75rem; display:flex; flex-wrap:wrap; gap:0.3rem; align-items:center;">
+            <span class="badge badge-soft badge-pending">Pending Approval</span>
+            ${dayBadge}
           </div>
         </div>
       `;
@@ -429,6 +587,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // ========================
   // RENDER ATTENDED SEMINARS
   // ========================
+
+  const getMaterialFileIcon = (fileURL) => {
+    const ext = String(fileURL || '').split('.').pop().toLowerCase();
+    if (ext === 'pdf') return '📄';
+    if (ext === 'ppt' || ext === 'pptx') return '📊';
+    return '📎';
+  };
 
   const renderAttendedSeminars = (attendedSeminars) => {
     if (!el.attendedSeminarsList) return;
@@ -448,7 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <article class="joined-seminar-card" style="border-color: rgba(32,58,115,0.2);">
             <div class="joined-seminar-head">
               <span class="badge badge-soft badge-attended">Attended</span>
-              <span class="joined-seminar-date">${escapeHtml(formatSeminarDate(s.date))} • ${escapeHtml(s.startTime || '')}</span>
+              <span class="joined-seminar-date">${escapeHtml(formatSeminarDate(s.date))} • ${escapeHtml(formatTime(s.startTime))}</span>
             </div>
             <h3 class="joined-seminar-title">${escapeHtml(s.title || '')}</h3>
             <p class="muted small joined-seminar-description">${escapeHtml(truncate(s.description || '', 110))}</p>
@@ -469,6 +634,17 @@ document.addEventListener('DOMContentLoaded', () => {
               >
                 ${evalDone ? 'Evaluation Submitted' : (canEval ? 'Fill Evaluation' : 'Evaluation Unavailable')}
               </button>
+              <button
+                class="btn secondary"
+                type="button"
+                data-toggle-materials="${escapeHtml(s.id)}"
+                style="flex:1; min-width:120px;"
+              >
+                📎 View Materials
+              </button>
+            </div>
+            <div id="materials-panel-${escapeHtml(s.id)}" style="display:none; margin-top:0.75rem; border-top:1px solid var(--border); padding-top:0.75rem;">
+              <div id="materials-list-${escapeHtml(s.id)}" class="muted small">Loading…</div>
             </div>
           </article>
         `;
@@ -490,6 +666,71 @@ document.addEventListener('DOMContentLoaded', () => {
         const registrationId = btn.getAttribute('data-open-eval');
         const seminarName = btn.getAttribute('data-eval-seminar');
         openEvalModal(registrationId, seminarName);
+      });
+    });
+
+    // Attach materials dropdown handlers
+    el.attendedSeminarsList.querySelectorAll('button[data-toggle-materials]').forEach((btn) => {
+      const seminarId = btn.getAttribute('data-toggle-materials');
+      const panel = document.getElementById(`materials-panel-${seminarId}`);
+      const listEl = document.getElementById(`materials-list-${seminarId}`);
+      let loaded = false;
+
+      btn.addEventListener('click', async () => {
+        const isOpen = panel?.style.display !== 'none';
+        if (panel) panel.style.display = isOpen ? 'none' : 'block';
+        btn.textContent = isOpen ? '📎 View Materials' : '📎 Hide Materials';
+
+        if (!isOpen && !loaded) {
+          loaded = true;
+          if (listEl) listEl.innerHTML = 'Loading materials…';
+          try {
+            const res = await authedFetch(`/api/employee/seminars/${seminarId}/materials`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.message || 'Could not load materials');
+            const materials = Array.isArray(data) ? data : [];
+            if (!materials.length) {
+              if (listEl) listEl.innerHTML = '<span>No materials available for this seminar yet.</span>';
+            } else {
+              if (listEl) {
+                listEl.innerHTML = '';
+                const select = document.createElement('select');
+                select.style.cssText = 'width:100%; padding:0.45rem 0.6rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--card-bg); color:var(--text); font-size:0.9rem; margin-bottom:0.6rem; cursor:pointer;';
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = `— Select a material (${materials.length} available) —`;
+                select.appendChild(defaultOpt);
+                materials.forEach((m) => {
+                  const opt = document.createElement('option');
+                  opt.value = m.fileURL || '';
+                  const ext = String(m.fileURL || '').split('.').pop().toUpperCase();
+                  opt.textContent = `${getMaterialFileIcon(m.fileURL)} ${m.title || 'Untitled'} (${ext})`;
+                  select.appendChild(opt);
+                });
+                listEl.appendChild(select);
+
+                const openBtn = document.createElement('a');
+                openBtn.className = 'btn secondary';
+                openBtn.style.cssText = 'display:inline-block; font-size:0.88rem; padding:0.35rem 0.75rem; text-decoration:none;';
+                openBtn.textContent = 'Open Selected';
+                openBtn.target = '_blank';
+                openBtn.rel = 'noopener';
+                openBtn.href = '#';
+                openBtn.addEventListener('click', (e) => {
+                  if (!select.value) { e.preventDefault(); return; }
+                  openBtn.href = select.value;
+                });
+                select.addEventListener('change', () => {
+                  openBtn.href = select.value || '#';
+                });
+                listEl.appendChild(openBtn);
+              }
+            }
+          } catch (err) {
+            if (listEl) listEl.innerHTML = `<span>${escapeHtml(err.message || 'Failed to load materials.')}</span>`;
+            loaded = false;
+          }
+        }
       });
     });
   };
@@ -586,14 +827,97 @@ document.addEventListener('DOMContentLoaded', () => {
   // PRE-REGISTER MODAL
   // ========================
 
-  const openJoinModal = ({ seminar, joinActionId }) => {
+  const openJoinModal = ({ seminar, joinActionId, chosenSessionId = null }) => {
     if (!el.joinBackdrop || !el.joinConfirmBtn || !el.joinConsent1 || !el.joinConsent2) return;
 
-    el.joinTitle.textContent = 'Pre-Register for Seminar';
-    const dateStr = `${formatSeminarDate(seminar.date)} • ${seminar.startTime || ''}`;
     const mandatoryLabel = seminar.mandatory ? 'Mandatory' : 'Optional';
+    const isPickOneMeta = seminar.multiSessionType === 'pick-one' && Array.isArray(seminar.sessions) && seminar.sessions.length > 1;
+
+    let modalTitle = 'Pre-Register for Seminar';
+    let dateStr;
+    if (chosenSessionId && Array.isArray(seminar.sessions)) {
+      const picked = seminar.sessions.find((s) => String(s._id || s.id || '') === String(chosenSessionId));
+      const pickedIdx = picked ? seminar.sessions.indexOf(picked) : -1;
+      if (picked && pickedIdx >= 0) {
+        modalTitle = `Pre-Register – Day ${pickedIdx + 1} of ${seminar.sessions.length}`;
+        dateStr = `${formatSeminarDate(picked.date)} • ${formatTime(picked.startTime)}`;
+      } else {
+        dateStr = `${formatSeminarDate(seminar.date)} • ${formatTime(seminar.startTime)}`;
+      }
+    } else if (isPickOneMeta) {
+      const first = formatSeminarDate(seminar.sessions[0].date);
+      const last = formatSeminarDate(seminar.sessions[seminar.sessions.length - 1].date);
+      dateStr = `${first} – ${last} (${seminar.sessions.length} sessions)`;
+    } else {
+      dateStr = `${formatSeminarDate(seminar.date)} • ${formatTime(seminar.startTime)}`;
+    }
+    el.joinTitle.textContent = modalTitle;
     el.joinMeta.textContent = `${dateStr} • ${mandatoryLabel} • ${seminar.remainingCapacity} slots remaining`;
     el.joinDesc.textContent = seminar.description || '';
+
+    // Render session picker for multi-session seminars
+    const isPickOne = seminar.multiSessionType === 'pick-one';
+    const isAll = seminar.multiSessionType === 'all' || !seminar.multiSessionType;
+    const hasMultiSessions = Array.isArray(seminar.sessions) && seminar.sessions.length > 1;
+
+    currentChosenSessionId = chosenSessionId || null;
+
+    if (el.joinSessionPicker) {
+      if (hasMultiSessions && isPickOne && chosenSessionId) {
+        const chosenSession = seminar.sessions?.find((s) => String(s._id || s.id || '') === String(chosenSessionId));
+        const chosenIdx = chosenSession ? seminar.sessions.indexOf(chosenSession) : -1;
+        const dayLabel = chosenIdx >= 0 ? `Day ${chosenIdx + 1} of ${seminar.sessions.length}` : '';
+        const seriesFirst = formatSeminarDate(seminar.sessions[0]?.date);
+        const seriesLast = formatSeminarDate(seminar.sessions[seminar.sessions.length - 1]?.date);
+        const chosenDateStr = chosenSession ? formatSeminarDate(chosenSession.date) : '';
+        const chosenTimeStr = chosenSession ? formatTime(chosenSession.startTime) : '';
+        const chosenDurStr = chosenSession ? `${chosenSession.durationHours} hrs` : '';
+        el.joinSessionPicker.innerHTML = `
+          <div style="border:1px solid rgba(32,58,115,0.2); border-radius:0.6rem; overflow:hidden; margin-top:0.25rem;">
+            <div style="background:rgba(32,58,115,0.06); padding:0.45rem 0.8rem; font-size:0.78rem; font-weight:600; color:var(--xu-blue); display:flex; align-items:center; gap:0.4rem;">
+              <i class="fa-solid fa-calendar-days"></i>
+              Multi-Day Series &bull; ${escapeHtml(seriesFirst)} – ${escapeHtml(seriesLast)}
+            </div>
+            <div style="padding:0.7rem 0.8rem; display:flex; align-items:center; gap:0.7rem; background:rgba(5,150,105,0.06); border-top:1px solid rgba(32,58,115,0.12);">
+              <i class="fa-solid fa-calendar-check" style="color:#059669; font-size:1.1rem; flex-shrink:0;"></i>
+              <div>
+                <div style="font-weight:700; font-size:0.9rem; color:var(--xu-blue);">
+                  You are registering for ${escapeHtml(dayLabel)}
+                </div>
+                <div style="margin-top:0.2rem; font-size:0.88rem; color:var(--text);">
+                  ${escapeHtml(chosenDateStr)} &bull; ${escapeHtml(chosenTimeStr)} &bull; ${escapeHtml(chosenDurStr)}
+                </div>
+              </div>
+            </div>
+          </div>`;
+        el.joinSessionPicker.style.display = 'block';
+      } else if (hasMultiSessions && isPickOne) {
+        const options = seminar.sessions
+          .map((s) => `
+            <label style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.4rem; cursor:pointer; padding:0.4rem 0.5rem; border-radius:0.4rem; border:1px solid var(--border);">
+              <input type="radio" name="join-session-choice" value="${escapeHtml(String(s._id))}" style="flex-shrink:0;" />
+              <span style="font-size:0.9rem;">${escapeHtml(formatSeminarDate(s.date))} &bull; ${escapeHtml(formatTime(s.startTime))} &bull; ${escapeHtml(String(s.durationHours))} hrs</span>
+            </label>`)
+          .join('');
+        el.joinSessionPicker.innerHTML = `
+          <div style="font-weight:600; font-size:0.9rem; color:var(--xu-blue); margin-bottom:0.5rem;">Choose your session:</div>
+          ${options}`;
+        el.joinSessionPicker.style.display = 'block';
+      } else if (hasMultiSessions && isAll) {
+        const dates = seminar.sessions
+          .map((s) => `<li style="margin-bottom:0.2rem;">${escapeHtml(formatSeminarDate(s.date))} &bull; ${escapeHtml(formatTime(s.startTime))} &bull; ${escapeHtml(String(s.durationHours))} hrs</li>`)
+          .join('');
+        el.joinSessionPicker.innerHTML = `
+          <div style="padding:0.6rem 0.8rem; background:rgba(32,58,115,0.06); border:1px solid rgba(32,58,115,0.15); border-radius:0.5rem; font-size:0.88rem;">
+            <strong style="color:var(--xu-blue);">All ${seminar.sessions.length} sessions required:</strong>
+            <ul style="margin:0.4rem 0 0; padding-left:1.2rem;">${dates}</ul>
+          </div>`;
+        el.joinSessionPicker.style.display = 'block';
+      } else {
+        el.joinSessionPicker.innerHTML = '';
+        el.joinSessionPicker.style.display = 'none';
+      }
+    }
 
     el.joinConsent1.checked = false;
     el.joinConsent2.checked = false;
@@ -601,28 +925,57 @@ document.addEventListener('DOMContentLoaded', () => {
     el.joinConfirmBtn.disabled = true;
 
     const updateConfirmState = () => {
-      el.joinConfirmBtn.disabled = !(el.joinConsent1.checked && el.joinConsent2.checked);
+      const consentsOk = el.joinConsent1.checked && el.joinConsent2.checked;
+      const sessionOk = !(hasMultiSessions && isPickOne) ||
+        !!currentChosenSessionId ||
+        !!document.querySelector('input[name="join-session-choice"]:checked');
+      el.joinConfirmBtn.disabled = !(consentsOk && sessionOk);
     };
 
     el.joinConsent1.onchange = updateConfirmState;
     el.joinConsent2.onchange = updateConfirmState;
 
+    // Re-run state check when a session radio is picked
+    if (hasMultiSessions && isPickOne && el.joinSessionPicker) {
+      el.joinSessionPicker.querySelectorAll('input[type="radio"]').forEach((r) => {
+        r.onchange = updateConfirmState;
+      });
+    }
+
     el.joinConfirmBtn.dataset.joinId = joinActionId || seminar.id || '';
+    el.joinConfirmBtn.dataset.sessionType = seminar.multiSessionType || 'all';
     el.joinBackdrop.style.display = 'flex';
   };
 
   const closeJoinModal = () => {
     if (!el.joinBackdrop) return;
     el.joinBackdrop.style.display = 'none';
+    currentChosenSessionId = null;
   };
 
   el.joinConfirmBtn?.addEventListener('click', async () => {
     const seminarId = el.joinConfirmBtn.dataset.joinId;
+    const sessionType = el.joinConfirmBtn.dataset.sessionType || 'all';
     if (!seminarId) return;
+
+    const fetchBody = {};
+    if (sessionType === 'pick-one') {
+      const sessionId = currentChosenSessionId || document.querySelector('input[name="join-session-choice"]:checked')?.value;
+      if (!sessionId) {
+        el.joinStatus.textContent = 'Please select a session date to attend.';
+        return;
+      }
+      fetchBody.sessionId = sessionId;
+    }
+
     el.joinStatus.textContent = 'Processing…';
     el.joinConfirmBtn.disabled = true;
     try {
-      const res = await authedFetch(`/api/employee/seminars/${seminarId}/register`, { method: 'POST' });
+      const res = await authedFetch(`/api/employee/seminars/${seminarId}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fetchBody),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Pre-registration failed');
       el.joinStatus.textContent = data?.message || 'Successfully pre-registered. Awaiting approval.';
@@ -670,8 +1023,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   el.logoutBtn?.addEventListener('click', () => {
-    window.localStorage.removeItem('gadims_employee_token');
-    window.localStorage.removeItem('gadims_role');
+    window.localStorage.removeItem('gims_employee_token');
+    window.localStorage.removeItem('gims_role');
     window.location.href = '/';
   });
 
@@ -702,7 +1055,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const blob = await res.blob();
       const disposition = res.headers.get('content-disposition') || '';
       const fileNameMatch = /filename="?([^";]+)"?/i.exec(disposition);
-      const suggestedName = fileNameMatch?.[1] || `GADIMS-Certificate-${registrationId}.png`;
+      const suggestedName = fileNameMatch?.[1] || `GIMS-Certificate-${registrationId}.png`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -739,11 +1092,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!seminarsRes.ok) throw new Error(seminarsData?.message || 'Failed to load seminars');
 
     if (data.profile?.role && data.profile.role !== 'employee') {
-      window.localStorage.setItem('gadims_role', String(data.profile.role));
+      window.localStorage.setItem('gims_role', String(data.profile.role));
       window.location.href = '/admin.html';
       return;
     }
-    window.localStorage.setItem('gadims_role', 'employee');
+    window.localStorage.setItem('gims_role', 'employee');
 
     // Topbar + Welcome
     const profile = data.profile || {};
@@ -754,11 +1107,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el.topbarEmail) el.topbarEmail.textContent = profile.email || '';
     if (el.topbarId) el.topbarId.textContent = profile.employeeId || '';
 
+    const attendedSeminars = Array.isArray(data.attendedSeminars)
+      ? data.attendedSeminars.filter((entry) => entry?.seminar?.id)
+      : [];
+
     // Compliance
     const compliance = data.compliance || {};
-    const progressPercent = compliance.progressPercent || 0;
+    const requiredSeminars = Number(compliance.requiredSeminars || 0);
+    const completedSeminars = attendedSeminars.length;
+    const progressPercent =
+      requiredSeminars === 0 ? 0 : Number(Math.min(100, (completedSeminars / requiredSeminars) * 100).toFixed(1));
+    const isCompliant = completedSeminars >= requiredSeminars && requiredSeminars > 0;
     if (el.complianceProgressText) {
-      el.complianceProgressText.textContent = `Progress: ${compliance.completedSeminars || 0} of ${compliance.requiredSeminars || 0} Required Seminars`;
+      el.complianceProgressText.textContent = `Progress: ${completedSeminars} of ${requiredSeminars} Required Seminars`;
     }
     if (el.complianceProgressPercent) el.complianceProgressPercent.textContent = `${progressPercent}%`;
     if (el.complianceProgressBar) el.complianceProgressBar.style.width = `${progressPercent}%`;
@@ -766,7 +1127,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const todayStr = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     if (el.complianceUpdatedAt) el.complianceUpdatedAt.textContent = `Status as of ${todayStr}`;
 
-    if (compliance.compliant) {
+    if (isCompliant) {
       if (el.complianceStatusBadge) {
         el.complianceStatusBadge.textContent = 'Compliant';
         el.complianceStatusBadge.style.background = 'rgba(16,185,129,0.10)';
@@ -794,7 +1155,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (el.complianceAdviceHeader) el.complianceAdviceHeader.textContent = 'You Are Almost There';
       if (el.complianceAdviceText) {
-        const remaining = (compliance.requiredSeminars || 0) - (compliance.completedSeminars || 0);
+        const remaining = requiredSeminars - completedSeminars;
         el.complianceAdviceText.textContent =
           remaining > 0
             ? `You still need ${remaining} seminar(s) to complete your requirement.`
@@ -839,7 +1200,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applySeminarFilter();
 
     // Render attended seminars
-    renderAttendedSeminars(Array.isArray(data.attendedSeminars) ? data.attendedSeminars : []);
+    renderAttendedSeminars(attendedSeminars);
 
     // Load notifications
     loadNotifications();
@@ -848,8 +1209,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initial load
   loadDashboard().catch((err) => {
     if (String(err?.message || '').toLowerCase().includes('not authenticated')) {
-      window.localStorage.removeItem('gadims_employee_token');
-      window.localStorage.removeItem('gadims_role');
+      window.localStorage.removeItem('gims_employee_token');
+      window.localStorage.removeItem('gims_role');
       window.location.href = '/';
       return;
     }

@@ -2,13 +2,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const body = document.body;
   if (!body) return;
 
-  const saved = window.localStorage.getItem('gadims_theme');
+  const saved = window.localStorage.getItem('gims_theme');
   const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   const initial = saved || (prefersDark ? 'dark' : 'light');
 
   const applyTheme = (theme) => {
     body.setAttribute('data-theme', theme);
-    window.localStorage.setItem('gadims_theme', theme);
+    window.localStorage.setItem('gims_theme', theme);
     document.querySelectorAll('[data-theme-toggle]').forEach((toggle) => {
       toggle.textContent = theme === 'dark' ? '☼' : '☾';
       toggle.setAttribute('aria-label', theme === 'dark' ? 'Switch to day mode' : 'Switch to night mode');

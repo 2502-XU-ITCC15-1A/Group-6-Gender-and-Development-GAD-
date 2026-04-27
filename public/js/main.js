@@ -1,4 +1,4 @@
-// Shared front-end behavior for GADIMS landing page
+// Shared front-end behavior for GIMS landing page
 
 document.addEventListener('DOMContentLoaded', () => {
   const topbar = document.getElementById('topbar');
@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'Key segments include:\n' +
         '• A walk‑through of Xavier University’s gender‑fair policies and codes of conduct.\n' +
         '• Clear explanation of reporting, referral, and support mechanisms.\n' +
-        '• A live demonstration of how seminar completion and attendance are monitored through GADIMS.\n\n' +
+        '• A live demonstration of how seminar completion and attendance are monitored through GIMS.\n\n' +
         'Participants leave with a concrete understanding of their responsibilities and of the institutional supports available to them.',
     },
     'seminar-3': {
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '• Listening to student narratives of belonging and exclusion.\n' +
         '• Designing safer procedures in offices, laboratories, and student organizations.\n' +
         '• Practicing language that affirms diverse identities in official communication.\n\n' +
-        'Outputs from the series can inform unit‑level GAD plans and future seminar designs within GADIMS.',
+        'Outputs from the series can inform unit‑level GAD plans and future seminar designs within GIMS.',
     },
   };
 

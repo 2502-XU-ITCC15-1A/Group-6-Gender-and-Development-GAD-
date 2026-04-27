@@ -40,6 +40,17 @@ const RegistrationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    sessionAttendance: [
+      {
+        sessionId: { type: mongoose.Schema.Types.ObjectId },
+        attended: { type: Boolean, default: false },
+        markedAt: { type: Date },
+      },
+    ],
+    chosenSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
   },
   {
     timestamps: true,

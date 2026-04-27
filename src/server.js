@@ -20,12 +20,18 @@ app.use(morgan('dev'));
 app.use(express.static('public'));
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'GADIMS API running' });
+  res.json({ status: 'ok', message: 'GIMS API running' });
 });
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/employee', employeeRoutes);
+
+app.use('/api', (req, res) => {
+  res.status(404).json({
+    message: `API route not found: ${req.method} ${req.originalUrl}`,
+  });
+});
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -38,7 +44,7 @@ const start = async () => {
   try {
     await connectDB();
     app.listen(PORT, () => {
-      console.log(`GADIMS server listening on port ${PORT}`);
+      console.log(`GIMS server listening on port ${PORT}`);
     });
   } catch (err) {
     console.error('Failed to start server', err);

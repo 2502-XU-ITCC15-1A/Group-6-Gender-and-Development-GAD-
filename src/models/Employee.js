@@ -14,6 +14,13 @@ const EmployeeSchema = new mongoose.Schema(
       enum: ['employee', 'admin'],
       default: 'employee',
     },
+    accountStatus: {
+      type: String,
+      enum: ['active', 'deactivated'],
+      default: 'active',
+      index: true,
+    },
+    deactivatedAt: { type: Date, default: null },
     seminarsAttended: [
       {
         type: mongoose.Schema.Types.ObjectId,

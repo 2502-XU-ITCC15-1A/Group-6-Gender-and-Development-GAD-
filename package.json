@@ -1,7 +1,7 @@
 {
   "name": "magis-gad-information-system",
   "version": "1.0.0",
-  "description": "GADIMS (Gender and Development Management and Information System) for Xavier University GAD Office",
+  "description": "GIMS (GAD Integrated Management System) for Xavier University GAD Office",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "dev": "nodemon src/server.js"
   },
   "keywords": [
-    "GADIMS",
+    "GIMS",
     "GAD",
     "seminar-tracking",
     "google-sheets",

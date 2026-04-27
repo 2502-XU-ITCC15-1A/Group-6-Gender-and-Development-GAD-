@@ -39,7 +39,7 @@ const closeModalBtn = document.getElementById('close-article-modal');
 const authedFetch = async (url, options = {}) => {
   if (!employeeToken) {
     // Attempt to hydrate from storage for basic persistence
-    const stored = window.localStorage.getItem('gadims_employee_token');
+    const stored = window.localStorage.getItem('gims_employee_token');
     if (stored) {
       employeeToken = stored;
     } else {

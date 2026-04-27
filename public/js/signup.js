@@ -183,8 +183,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (data.token) {
-        window.localStorage.setItem('gadims_employee_token', data.token);
-        window.localStorage.setItem('gadims_role', 'employee');
+        window.localStorage.setItem('gims_employee_token', data.token);
+        window.localStorage.setItem('gims_role', 'employee');
       }
       completeStatusEl.textContent = 'Account created. Redirecting to your dashboard…';
       setTimeout(() => {

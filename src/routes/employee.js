@@ -18,7 +18,7 @@ const authMiddleware = (req, res, next) => {
   if (!header) return res.status(401).json({ message: 'Missing Authorization header' });
   const token = header.replace('Bearer ', '');
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'gadims-secret');
+    const payload = jwt.verify(token, process.env.JWT_SECRET || 'gims-secret');
     if (payload.role !== 'employee') return res.status(403).json({ message: 'Forbidden' });
     req.user = payload;
     next();
@@ -26,6 +26,21 @@ const authMiddleware = (req, res, next) => {
     return res.status(401).json({ message: 'Invalid token' });
   }
 };
+
+const requireActiveEmployee = async (req, res, next) => {
+  try {
+    const employee = await Employee.findById(req.user.id).select('accountStatus');
+    if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
+    if (employee.accountStatus === 'deactivated') {
+      return res.status(403).json({ message: 'Your account is deactivated. Please contact the GAD office.' });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
+router.use(authMiddleware, requireActiveEmployee);
 
 const makeEmployeeDisplayId = (id) => {
   const tail = String(id || '').replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase();
@@ -56,7 +71,7 @@ const buildCertificateHtml = ({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GADIMS Certificate - ${escapeHtml(employeeName)}</title>
+    <title>GIMS Certificate - ${escapeHtml(employeeName)}</title>
     <style>
       :root { color-scheme: light; }
       body {
@@ -178,7 +193,7 @@ const buildCertificateHtml = ({
   </head>
   <body>
     <article class="certificate">
-      <div class="watermark">GADIMS</div>
+      <div class="watermark">GIMS</div>
       <header class="header">
         <div class="org">XAVIER UNIVERSITY - ATENEO DE CAGAYAN</div>
         <div class="title">Certificate of Attendance</div>
@@ -204,14 +219,14 @@ const buildCertificateHtml = ({
 
       <footer class="footer">
         <div class="sig">GAD Office Representative</div>
-        <div class="badge">System-Issued via GADIMS</div>
+        <div class="badge">System-Issued via GIMS</div>
       </footer>
     </article>
   </body>
 </html>`;
 };
 
-router.get('/me', authMiddleware, async (req, res, next) => {
+router.get('/me', async (req, res, next) => {
   try {
     const employee = await Employee.findById(req.user.id);
     if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
@@ -221,15 +236,12 @@ router.get('/me', authMiddleware, async (req, res, next) => {
   }
 });
 
-router.get('/dashboard', authMiddleware, async (req, res, next) => {
+router.get('/dashboard', async (req, res, next) => {
   try {
     const employee = await Employee.findById(req.user.id);
     if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
 
     const required = Number(employee.requiredSeminarsPerYear || 5);
-    const completed = Array.isArray(employee.seminarsAttended) ? employee.seminarsAttended.length : 0;
-    const progressPercent = required === 0 ? 0 : Math.min(100, (completed / required) * 100);
-    const compliant = completed >= required;
 
     const dept = employee.department;
     const maleCount = await Employee.countDocuments({
@@ -244,7 +256,7 @@ router.get('/dashboard', authMiddleware, async (req, res, next) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const seminars = await Seminar.find({ date: { $gte: today } })
+    const seminars = await Seminar.find({ date: { $gte: today }, isDeleted: { $ne: true } })
       .sort({ date: 1, startTime: 1 })
       .populate('createdBy', 'name');
 
@@ -261,6 +273,16 @@ router.get('/dashboard', authMiddleware, async (req, res, next) => {
         capacity: s.capacity,
         remainingCapacity: remaining,
         instructorName: s.createdBy?.name || 'GAD Office',
+        multiSessionType: s.multiSessionType || null,
+        registeredEmployees: Array.isArray(s.registeredEmployees) ? s.registeredEmployees.map(String) : [],
+        sessions: Array.isArray(s.sessions) ? s.sessions.map((sess) => ({
+          _id: sess._id?.toString() || '',
+          id: sess._id?.toString() || '',
+          date: sess.date,
+          startTime: sess.startTime,
+          durationHours: sess.durationHours,
+          isHeld: sess.isHeld || false,
+        })) : [],
       };
     });
 
@@ -273,10 +295,13 @@ router.get('/dashboard', authMiddleware, async (req, res, next) => {
       .populate({
         path: 'seminarID',
         select: 'title description date startTime durationHours mandatory',
+        match: { isDeleted: { $ne: true } },
       })
       .sort({ registeredAt: -1 });
 
-    const certificatesView = certificates.map((r) => ({
+    const certificatesView = certificates
+      .filter((r) => Boolean(r?.seminarID))
+      .map((r) => ({
       registrationId: r._id.toString(),
       certificateCode: r.certificateCode || '',
       certificateIssuedAt: r.certificateIssuedAt || r.updatedAt || null,
@@ -286,13 +311,14 @@ router.get('/dashboard', authMiddleware, async (req, res, next) => {
         date: r.seminarID?.date,
         startTime: r.seminarID?.startTime,
       },
-    }));
+      }));
 
     // All registrations for this employee (to build different views)
     const allRegistrations = await Registration.find({ employeeID: req.user.id })
       .populate({
         path: 'seminarID',
-        select: 'title description date startTime durationHours mandatory capacity registeredEmployees',
+        select: 'title description date startTime durationHours mandatory capacity registeredEmployees sessions multiSessionType',
+        match: { isDeleted: { $ne: true } },
       })
       .sort({ registeredAt: -1 });
 
@@ -302,6 +328,7 @@ router.get('/dashboard', authMiddleware, async (req, res, next) => {
       .map((r) => ({
         registrationId: r._id.toString(),
         status: r.status,
+        chosenSessionId: r.chosenSessionId?.toString() || null,
         seminar: {
           id: r.seminarID._id.toString(),
           title: r.seminarID.title,
@@ -310,6 +337,14 @@ router.get('/dashboard', authMiddleware, async (req, res, next) => {
           startTime: r.seminarID.startTime,
           durationHours: r.seminarID.durationHours,
           mandatory: r.seminarID.mandatory,
+          multiSessionType: r.seminarID.multiSessionType || null,
+          sessions: Array.isArray(r.seminarID.sessions) ? r.seminarID.sessions.map((sess) => ({
+            _id: sess._id?.toString() || '',
+            id: sess._id?.toString() || '',
+            date: sess.date,
+            startTime: sess.startTime,
+            durationHours: sess.durationHours,
+          })) : [],
         },
       }));
 
@@ -334,6 +369,10 @@ router.get('/dashboard', authMiddleware, async (req, res, next) => {
         },
       }));
 
+    const completed = attendedSeminars.length;
+    const progressPercent = required === 0 ? 0 : Math.min(100, (completed / required) * 100);
+    const compliant = completed >= required;
+
     res.json({
       profile: {
         employeeId: makeEmployeeDisplayId(employee._id),
@@ -343,7 +382,7 @@ router.get('/dashboard', authMiddleware, async (req, res, next) => {
         position: employee.position,
         birthSex: employee.birthSex,
         genderIdentity: employee.genderIdentity || null,
-        accountStatus: 'Active',
+        accountStatus: employee.accountStatus === 'deactivated' ? 'Deactivated' : 'Active',
         departmentGenderCounts: {
           male: maleCount,
           female: femaleCount,
@@ -366,7 +405,7 @@ router.get('/dashboard', authMiddleware, async (req, res, next) => {
   }
 });
 
-router.get('/certificates/:registrationId/download', authMiddleware, async (req, res, next) => {
+router.get('/certificates/:registrationId/download', async (req, res, next) => {
   try {
     const employee = await Employee.findById(req.user.id);
     if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
@@ -376,7 +415,11 @@ router.get('/certificates/:registrationId/download', authMiddleware, async (req,
       employeeID: req.user.id,
       status: 'attended',
       certificateIssued: true,
-    }).populate('seminarID', 'title date startTime durationHours');
+    }).populate({
+      path: 'seminarID',
+      select: 'title date startTime durationHours',
+      match: { isDeleted: { $ne: true } },
+    });
 
     if (!registration || !registration.seminarID) {
       return res.status(404).json({ message: 'Certificate not found' });
@@ -424,7 +467,7 @@ router.get('/certificates/:registrationId/download', authMiddleware, async (req,
     res.setHeader('Content-Type', 'image/png');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="GADIMS-Certificate-${fileNameSafe}-${employeeDisplayId}.png"`
+      `attachment; filename="GIMS-Certificate-${fileNameSafe}-${employeeDisplayId}.png"`
     );
     res.send(pngBuffer);
   } catch (err) {
@@ -432,7 +475,7 @@ router.get('/certificates/:registrationId/download', authMiddleware, async (req,
   }
 });
 
-router.patch('/me', authMiddleware, async (req, res, next) => {
+router.patch('/me', async (req, res, next) => {
   try {
     const updates = {
       birthSex: req.body.birthSex,
@@ -450,9 +493,9 @@ router.patch('/me', authMiddleware, async (req, res, next) => {
   }
 });
 
-router.get('/seminars', authMiddleware, async (req, res, next) => {
+router.get('/seminars', async (req, res, next) => {
   try {
-    const seminars = await Seminar.find().sort({ date: 1, startTime: 1 });
+    const seminars = await Seminar.find({ isDeleted: { $ne: true } }).sort({ date: 1, startTime: 1 });
     res.json(seminars);
   } catch (err) {
     next(err);
@@ -460,9 +503,9 @@ router.get('/seminars', authMiddleware, async (req, res, next) => {
 });
 
 // Pre-register for a seminar
-router.post('/seminars/:id/register', authMiddleware, async (req, res, next) => {
+router.post('/seminars/:id/register', async (req, res, next) => {
   try {
-    const seminar = await Seminar.findById(req.params.id);
+    const seminar = await Seminar.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
     if (!seminar) {
       return res.status(404).json({ message: 'Seminar not found' });
     }
@@ -482,6 +525,19 @@ router.post('/seminars/:id/register', authMiddleware, async (req, res, next) => 
       return res.status(400).json({ message: 'Registration Full' });
     }
 
+    let chosenSessionId = null;
+    if (seminar.multiSessionType === 'pick-one' && Array.isArray(seminar.sessions) && seminar.sessions.length > 1) {
+      const { sessionId } = req.body;
+      if (!sessionId) {
+        return res.status(400).json({ message: 'Please select a session date to attend.' });
+      }
+      const validSession = seminar.sessions.find((s) => String(s._id) === String(sessionId));
+      if (!validSession) {
+        return res.status(400).json({ message: 'The selected session does not exist for this seminar.' });
+      }
+      chosenSessionId = validSession._id;
+    }
+
     seminar.registeredEmployees.push(employeeId);
     await seminar.save();
 
@@ -489,6 +545,7 @@ router.post('/seminars/:id/register', authMiddleware, async (req, res, next) => 
       seminarID: seminar._id,
       employeeID: employeeId,
       status: 'pre-registered',
+      ...(chosenSessionId ? { chosenSessionId } : {}),
     });
 
     res.json({ message: 'You have successfully pre-registered for this seminar. Your registration is pending approval by the GAD Admin.' });
@@ -501,7 +558,7 @@ router.post('/seminars/:id/register', authMiddleware, async (req, res, next) => 
 });
 
 // Get notifications for current employee
-router.get('/notifications', authMiddleware, async (req, res, next) => {
+router.get('/notifications', async (req, res, next) => {
   try {
     const notifications = await Notification.find({ employeeID: req.user.id })
       .sort({ createdAt: -1 })
@@ -517,7 +574,7 @@ router.get('/notifications', authMiddleware, async (req, res, next) => {
 });
 
 // Mark a notification as read
-router.put('/notifications/:id/read', authMiddleware, async (req, res, next) => {
+router.put('/notifications/:id/read', async (req, res, next) => {
   try {
     const notification = await Notification.findOneAndUpdate(
       { _id: req.params.id, employeeID: req.user.id },
@@ -532,7 +589,7 @@ router.put('/notifications/:id/read', authMiddleware, async (req, res, next) => 
 });
 
 // Mark all notifications as read
-router.put('/notifications/read-all', authMiddleware, async (req, res, next) => {
+router.put('/notifications/read-all', async (req, res, next) => {
   try {
     await Notification.updateMany(
       { employeeID: req.user.id, read: false },
@@ -545,7 +602,7 @@ router.put('/notifications/read-all', authMiddleware, async (req, res, next) => 
 });
 
 // Get evaluation form status for a registration
-router.get('/registrations/:registrationId/evaluation', authMiddleware, async (req, res, next) => {
+router.get('/registrations/:registrationId/evaluation', async (req, res, next) => {
   try {
     const registration = await Registration.findOne({
       _id: req.params.registrationId,
@@ -578,7 +635,7 @@ router.get('/registrations/:registrationId/evaluation', authMiddleware, async (r
 });
 
 // Submit evaluation form
-router.post('/registrations/:registrationId/evaluation', authMiddleware, async (req, res, next) => {
+router.post('/registrations/:registrationId/evaluation', async (req, res, next) => {
   try {
     const registration = await Registration.findOne({
       _id: req.params.registrationId,
@@ -633,7 +690,7 @@ router.post('/registrations/:registrationId/evaluation', authMiddleware, async (
   }
 });
 
-router.get('/materials', authMiddleware, async (req, res, next) => {
+router.get('/materials', async (req, res, next) => {
   try {
     const materials = await LearningMaterial.find().sort({ createdAt: -1 });
     res.json(materials);
@@ -642,7 +699,31 @@ router.get('/materials', authMiddleware, async (req, res, next) => {
   }
 });
 
-router.get('/registrations', authMiddleware, async (req, res, next) => {
+// Get materials for a specific seminar — only available if the employee has attended
+router.get('/seminars/:id/materials', async (req, res, next) => {
+  try {
+    const registration = await Registration.findOne({
+      seminarID: req.params.id,
+      employeeID: req.user.id,
+      status: 'attended',
+    });
+
+    if (!registration) {
+      return res.status(403).json({ message: 'Materials are only available to employees who have attended this seminar.' });
+    }
+
+    const seminar = await Seminar.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+      .populate('materials')
+      .select('materials');
+    if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
+
+    res.json(Array.isArray(seminar.materials) ? seminar.materials : []);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/registrations', async (req, res, next) => {
   try {
     const regs = await Registration.find({ employeeID: req.user.id })
       .populate('seminarID')
@@ -653,7 +734,7 @@ router.get('/registrations', authMiddleware, async (req, res, next) => {
   }
 });
 
-router.get('/articles', authMiddleware, async (req, res, next) => {
+router.get('/articles', async (req, res, next) => {
   try {
     const articles = await Article.find({ published: true })
       .select('title excerpt imageUrl publishedAt seminar')
@@ -666,7 +747,7 @@ router.get('/articles', authMiddleware, async (req, res, next) => {
   }
 });
 
-router.get('/articles/:id', authMiddleware, async (req, res, next) => {
+router.get('/articles/:id', async (req, res, next) => {
   try {
     const article = await Article.findOne({ _id: req.params.id, published: true }).populate('seminar');
     if (!article) return res.status(404).json({ message: 'Not found' });
