@@ -178,10 +178,10 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(body?.message || 'Login failed.');
       }
       if (body.token) {
-        window.localStorage.setItem('gadims_employee_token', body.token);
+        window.localStorage.setItem('gims_employee_token', body.token);
       }
       if (body.role) {
-        window.localStorage.setItem('gadims_role', String(body.role));
+        window.localStorage.setItem('gims_role', String(body.role));
       }
       const role = body.role || 'employee';
       statusEl.textContent = 'Logged in. Redirecting to your dashboard…';

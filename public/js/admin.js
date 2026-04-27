@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-  let adminToken = window.localStorage.getItem('gadims_employee_token') || null;
+  let adminToken = window.localStorage.getItem('gims_employee_token') || null;
 
   const decodeJwtPayload = (jwtToken) => {
     try {
@@ -16,8 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const payload = decodeJwtPayload(adminToken);
   if (!adminToken || payload?.role !== 'admin') {
-    window.localStorage.removeItem('gadims_employee_token');
-    window.localStorage.removeItem('gadims_role');
+    window.localStorage.removeItem('gims_employee_token');
+    window.localStorage.removeItem('gims_role');
     window.location.href = '/';
     return;
   }
@@ -43,6 +43,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const seminarsMonthFilterEl = document.getElementById('admin-seminars-month-filter');
   const seminarsYearFilterEl = document.getElementById('admin-seminars-year-filter');
   const seminarsClearFiltersBtn = document.getElementById('admin-seminars-clear-filters');
+  const toggleDeletedSeminarsBtn = document.getElementById('admin-toggle-deleted-seminars-btn');
+  const deletedSeminarsModalEl = document.getElementById('admin-deleted-seminars-modal');
+  const deletedSeminarsCloseBtn = document.getElementById('admin-deleted-seminars-close');
   const seminarsPrevBtn = document.getElementById('admin-seminars-prev-btn');
   const seminarsNextBtn = document.getElementById('admin-seminars-next-btn');
   const seminarEditModalEl = document.getElementById('admin-seminar-edit-modal');
@@ -78,11 +81,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const completionRateEl = document.getElementById('admin-completion-rate');
   const compliantEmployeesEl = document.getElementById('admin-compliant-employees');
   const selectModeEl = document.getElementById('admin-select-mode');
+  const employeeSearchEl = document.getElementById('admin-employee-search');
   const departmentFilterEl = document.getElementById('admin-department-filter');
+  const accountStatusFilterEl = document.getElementById('admin-account-status-filter');
   const notifyBtn = document.getElementById('admin-notify-btn');
   const exportBtn = document.getElementById('admin-export-btn');
   const employeesStatusEl = document.getElementById('admin-employees-status');
   const employeesTableEl = document.getElementById('admin-employees-table');
+  const deletedSeminarsListEl = document.getElementById('admin-deleted-seminars-list');
+  const deletedSeminarsStatusEl = document.getElementById('admin-deleted-seminars-status');
   const topbarNameEl = document.getElementById('admin-topbar-name');
   const topbarEmailEl = document.getElementById('admin-topbar-email');
   const topbarIdEl = document.getElementById('admin-topbar-id');
@@ -93,12 +100,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const approveSelectedBtn = document.getElementById('admin-approve-selected-btn');
   const preRegSelectAllEl = document.getElementById('admin-pre-reg-select-all');
 
+  // Materials tab elements
+  const seminarMaterialsFormEl = document.getElementById('admin-seminar-materials-form');
+  const materialTitleEl = document.getElementById('admin-material-title');
+  const materialFileEl = document.getElementById('admin-material-file');
+  const materialsUploadStatusEl = document.getElementById('admin-materials-upload-status');
+  const seminarMaterialsListEl = document.getElementById('admin-seminar-materials-list');
+
+  // Report tab elements
+  const seminarReportContentEl = document.getElementById('admin-seminar-report-content');
+  let seminarReportChartInstance = null;
+
   let currentSeminars = [];
   let seminarFilters = {
     query: '',
     month: '',
     year: '',
   };
+  let deletedSeminars = [];
+  let isDeletedSeminarsModalOpen = false;
+  let accountStatusMenuEl = null;
+  let employeeSearchDebounceId = null;
   let attendanceModalState = {
     seminarId: null,
     isHeld: false,
@@ -133,6 +155,17 @@ document.addEventListener('DOMContentLoaded', () => {
     return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
   };
 
+  const formatTime = (value) => {
+    if (!value) return '';
+    const match = /^(\d{1,2}):(\d{2})$/.exec(String(value).trim());
+    if (!match) return String(value);
+    let hours = Number(match[1]);
+    const minutes = match[2];
+    const period = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    return `${hours}:${minutes} ${period}`;
+  };
+
   const parseTimeToMinutes = (value) => {
     const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
     if (!match) return 0;
@@ -158,6 +191,305 @@ document.addEventListener('DOMContentLoaded', () => {
       .replaceAll("'", '&#039;');
   };
 
+  const normalizeAccountStatus = (value) => {
+    return String(value || '').toLowerCase() === 'deactivated' ? 'deactivated' : 'active';
+  };
+
+  const getAccountStatusBadge = (value) => {
+    const normalized = normalizeAccountStatus(value);
+    if (normalized === 'deactivated') {
+      return '<span class="badge badge-red">Deactivated</span>';
+    }
+    return '<span class="badge badge-green">Active</span>';
+  };
+
+  const getRetentionDaysLeftText = (value) => {
+    if (!value) return 'Unknown retention';
+    const now = Date.now();
+    const target = new Date(value).getTime();
+    if (Number.isNaN(target)) return 'Unknown retention';
+    const diffMs = Math.max(0, target - now);
+    const days = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+    if (days <= 1) return 'Deletes in less than 1 day';
+    return `Deletes in ${days} days`;
+  };
+
+  const setDeletedSeminarsModalVisibility = (isOpen) => {
+    isDeletedSeminarsModalOpen = Boolean(isOpen);
+    if (deletedSeminarsModalEl) {
+      deletedSeminarsModalEl.style.display = isDeletedSeminarsModalOpen ? 'flex' : 'none';
+    }
+    if (toggleDeletedSeminarsBtn) {
+      toggleDeletedSeminarsBtn.setAttribute('aria-expanded', isDeletedSeminarsModalOpen ? 'true' : 'false');
+    }
+  };
+
+  const closeDeletedSeminarsModal = () => {
+    setDeletedSeminarsModalVisibility(false);
+  };
+
+  const closeAccountStatusMenu = () => {
+    if (!accountStatusMenuEl) return;
+    accountStatusMenuEl.remove();
+    accountStatusMenuEl = null;
+  };
+
+  const updateEmployeeAccountStatus = async (row, targetStatus) => {
+    try {
+      const res = await authedFetch(`/api/admin/employees/${row.id}/account-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountStatus: targetStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Failed to update account status');
+      if (employeesStatusEl) employeesStatusEl.textContent = data?.message || 'Account status updated.';
+      await loadSummary();
+      await loadDepartmentsAndEmployees();
+    } catch (err) {
+      if (employeesStatusEl) employeesStatusEl.textContent = err.message || 'Failed to update account status.';
+    }
+  };
+
+  const openAccountStatusMenu = (event, row) => {
+    if (!row) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeAccountStatusMenu();
+
+    const isCurrentlyDeactivated = normalizeAccountStatus(row.accountStatus) === 'deactivated';
+    const targetStatus = isCurrentlyDeactivated ? 'active' : 'deactivated';
+    const actionLabel = isCurrentlyDeactivated ? 'Reactivate Account' : 'Deactivate Account';
+
+    const menu = document.createElement('div');
+    menu.style.position = 'fixed';
+    menu.style.zIndex = '1200';
+    menu.style.background = '#fff';
+    menu.style.border = '1px solid var(--border)';
+    menu.style.borderRadius = '0.55rem';
+    menu.style.boxShadow = '0 10px 30px rgba(15,23,42,0.16)';
+    menu.style.padding = '0.35rem';
+    menu.style.minWidth = '190px';
+    menu.style.maxWidth = '240px';
+
+    const actionBtn = document.createElement('button');
+    actionBtn.type = 'button';
+    actionBtn.className = 'btn secondary';
+    actionBtn.style.width = '100%';
+    actionBtn.style.textAlign = 'left';
+    actionBtn.style.display = 'block';
+    actionBtn.textContent = actionLabel;
+    actionBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeAccountStatusMenu();
+      await updateEmployeeAccountStatus(row, targetStatus);
+    });
+
+    menu.appendChild(actionBtn);
+    document.body.appendChild(menu);
+
+    const rect = menu.getBoundingClientRect();
+    const left = Math.min(event.clientX, window.innerWidth - rect.width - 10);
+    const top = Math.min(event.clientY, window.innerHeight - rect.height - 10);
+    menu.style.left = `${Math.max(8, left)}px`;
+    menu.style.top = `${Math.max(8, top)}px`;
+
+    accountStatusMenuEl = menu;
+  };
+
+  // ========================
+  // MULTI-SESSION CALENDAR
+  // ========================
+
+  const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const CAL_DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+  const toYMD = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const todayYMD = toYMD(new Date());
+
+  const calState = {
+    create: { year: new Date().getFullYear(), month: new Date().getMonth(), sessions: new Map() },
+    edit:   { year: new Date().getFullYear(), month: new Date().getMonth(), sessions: new Map() },
+  };
+
+  const renderCalendar = (mode) => {
+    const state = calState[mode];
+    const el = document.getElementById(`${mode}-session-calendar`);
+    if (!el) return;
+
+    const { year, month, sessions } = state;
+    const firstDow = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const prevMonthDays = new Date(year, month, 0).getDate();
+
+    const labelCells = CAL_DAYS.map((d) => `<div class="session-cal-day-label">${d}</div>`).join('');
+    const cells = [];
+
+    for (let i = 0; i < firstDow; i++) {
+      cells.push(`<button type="button" class="session-cal-day is-other-month" disabled>${prevMonthDays - firstDow + i + 1}</button>`);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const isPast = dateStr < todayYMD;
+      const isToday = dateStr === todayYMD;
+      const sess = sessions.get(dateStr);
+      const isSelected = Boolean(sess);
+      const isLocked = Boolean(sess?.locked);
+      const cls = ['session-cal-day', isToday && 'is-today', isLocked && 'is-locked', !isLocked && isSelected && 'is-selected'].filter(Boolean).join(' ');
+      const disabled = (isPast && !isSelected) || isLocked ? 'disabled' : '';
+      cells.push(`<button type="button" class="${cls}" data-cal-date="${dateStr}" data-cal-mode="${mode}" ${disabled}>${d}</button>`);
+    }
+
+    const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7;
+    for (let i = 1; i <= totalCells - firstDow - daysInMonth; i++) {
+      cells.push(`<button type="button" class="session-cal-day is-other-month" disabled>${i}</button>`);
+    }
+
+    el.innerHTML = `
+      <div class="session-cal">
+        <div class="session-cal-header">
+          <button type="button" class="session-cal-nav" data-cal-prev="${mode}">&#8249;</button>
+          <span class="session-cal-title">${CAL_MONTHS[month]} ${year}</span>
+          <button type="button" class="session-cal-nav" data-cal-next="${mode}">&#8250;</button>
+        </div>
+        <div class="session-cal-grid">
+          ${labelCells}
+          ${cells.join('')}
+        </div>
+      </div>
+    `;
+
+    el.querySelectorAll('[data-cal-prev]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.month -= 1;
+        if (state.month < 0) { state.month = 11; state.year -= 1; }
+        renderCalendar(mode);
+      });
+    });
+    el.querySelectorAll('[data-cal-next]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.month += 1;
+        if (state.month > 11) { state.month = 0; state.year += 1; }
+        renderCalendar(mode);
+      });
+    });
+    el.querySelectorAll('[data-cal-date]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        toggleCalendarDate(mode, btn.getAttribute('data-cal-date'));
+      });
+    });
+  };
+
+  const toggleCalendarDate = (mode, dateStr) => {
+    const state = calState[mode];
+    const existing = state.sessions.get(dateStr);
+    if (existing?.locked) return;
+    if (existing) {
+      state.sessions.delete(dateStr);
+    } else {
+      const defaultTime = document.getElementById(`${mode}-cal-default-time`)?.value || '08:00';
+      const defaultDuration = parseFloat(document.getElementById(`${mode}-cal-default-duration`)?.value) || 1;
+      state.sessions.set(dateStr, { startTime: defaultTime, durationHours: defaultDuration });
+    }
+    renderCalendar(mode);
+    renderSessionList(mode);
+  };
+
+  const renderSessionList = (mode) => {
+    const state = calState[mode];
+    const listEl = document.getElementById(`${mode}-session-list`);
+    const countEl = document.getElementById(`${mode}-session-count`);
+    if (!listEl) return;
+
+    const sorted = Array.from(state.sessions.entries()).sort(([a], [b]) => a.localeCompare(b));
+    if (countEl) countEl.textContent = sorted.length;
+
+    if (!sorted.length) {
+      listEl.innerHTML = '<p class="muted small" style="margin:0;">Click dates on the calendar to add sessions.</p>';
+      return;
+    }
+
+    listEl.innerHTML = sorted.map(([dateStr, sess]) => {
+      const label = new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      const locked = Boolean(sess?.locked);
+      return `
+        <div class="session-row" data-session-date="${escapeHtml(dateStr)}">
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.3rem;">
+              <span style="font-weight:600; font-size:0.88rem;">${escapeHtml(label)}</span>
+              ${locked ? '<span class="badge badge-green" style="font-size:0.72rem; padding:0.1rem 0.45rem;">Held — locked</span>' : ''}
+            </div>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+              <label style="margin-bottom:0; font-size:0.8rem;">
+                Time
+                <input type="time" class="session-time-input" value="${escapeHtml(sess.startTime || '08:00')}" ${locked ? 'disabled' : ''} style="font-size:0.82rem; padding:0.22rem 0.35rem;" />
+              </label>
+              <label style="margin-bottom:0; font-size:0.8rem;">
+                Duration (hrs)
+                <input type="number" class="session-duration-input" value="${escapeHtml(String(sess.durationHours || 1))}" min="0.5" step="0.5" ${locked ? 'disabled' : ''} style="font-size:0.82rem; padding:0.22rem 0.35rem; width:5rem;" />
+              </label>
+            </div>
+          </div>
+          ${!locked ? `<button type="button" class="session-remove-btn btn secondary" style="padding:0.28rem 0.55rem; font-size:0.8rem; border-color:#dc2626; color:#b91c1c; align-self:center; white-space:nowrap; flex-shrink:0;">✕</button>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('[data-session-date]').forEach((row) => {
+      const dateStr = row.getAttribute('data-session-date');
+      row.querySelector('.session-time-input')?.addEventListener('change', (e) => {
+        const s = state.sessions.get(dateStr);
+        if (s && !s.locked) s.startTime = e.target.value;
+      });
+      row.querySelector('.session-duration-input')?.addEventListener('change', (e) => {
+        const s = state.sessions.get(dateStr);
+        if (s && !s.locked) s.durationHours = parseFloat(e.target.value) || 1;
+      });
+      row.querySelector('.session-remove-btn')?.addEventListener('click', () => {
+        state.sessions.delete(dateStr);
+        renderCalendar(mode);
+        renderSessionList(mode);
+      });
+    });
+  };
+
+  const collectSessions = (mode) => {
+    return Array.from(calState[mode].sessions.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, sess]) => {
+        const out = { date, startTime: sess.startTime || '08:00', durationHours: sess.durationHours || 1 };
+        if (sess._id) out._id = sess._id;
+        return out;
+      });
+  };
+
+  const setCalendarMode = (mode, isMulti) => {
+    const singleEl = document.getElementById(`${mode}-single-session-fields`);
+    const multiEl = document.getElementById(`${mode}-multi-session-section`);
+    if (singleEl) singleEl.style.display = isMulti ? 'none' : 'grid';
+    if (multiEl) multiEl.style.display = isMulti ? 'block' : 'none';
+    if (singleEl) {
+      singleEl.querySelectorAll('input').forEach((inp) => { inp.required = !isMulti; });
+    }
+    if (isMulti) {
+      renderCalendar(mode);
+      renderSessionList(mode);
+    }
+  };
+
+  const initCalendarToggle = (mode) => {
+    const toggle = document.getElementById(`${mode}-multi-session-toggle`);
+    toggle?.addEventListener('change', () => setCalendarMode(mode, toggle.checked));
+  };
+
   // ========================
   // MODAL TABS
   // ========================
@@ -170,6 +502,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.modal-tab-panel').forEach((panel) => {
       panel.classList.toggle('is-active', panel.id === `modal-tab-${tabName}`);
     });
+    if (tabName === 'materials' && attendanceModalState.seminarId) {
+      loadSeminarMaterials(attendanceModalState.seminarId);
+    }
+    if (tabName === 'report' && attendanceModalState.seminarId) {
+      loadSeminarReport(attendanceModalState.seminarId);
+    }
   };
 
   document.querySelectorAll('.modal-tab-btn').forEach((btn) => {
@@ -238,6 +576,232 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ========================
+  // SEMINAR REPORT
+  // ========================
+
+  const loadSeminarReport = async (seminarId) => {
+    if (!seminarReportContentEl) return;
+    seminarReportContentEl.innerHTML = '<p class="muted">Loading report…</p>';
+
+    if (seminarReportChartInstance) {
+      seminarReportChartInstance.destroy();
+      seminarReportChartInstance = null;
+    }
+
+    try {
+      const res = await authedFetch(`/api/admin/seminars/${seminarId}/report`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Failed to load report');
+
+      const { counts, demographics, totalTracked } = data;
+      const totalApproved = (counts.registered || 0) + (counts.attended || 0) + (counts.absent || 0);
+      const attendedPct = totalApproved > 0 ? Math.round((counts.attended / totalApproved) * 100) : 0;
+      const absentPct = totalApproved > 0 ? Math.round((counts.absent / totalApproved) * 100) : 0;
+
+      const hasDemoData = (demographics.male + demographics.female + demographics.other) > 0;
+
+      seminarReportContentEl.innerHTML = `
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:0.65rem; margin-bottom:1.1rem;">
+          <div style="padding:0.75rem 0.9rem; border:1px solid var(--border); border-radius:0.65rem; background:#fff; text-align:center;">
+            <div class="muted small" style="font-size:0.8rem;">Pre-Registered</div>
+            <div style="font-size:1.6rem; font-weight:800; color:var(--xu-blue); margin-top:0.2rem;">${counts.preRegistered}</div>
+          </div>
+          <div style="padding:0.75rem 0.9rem; border:1px solid var(--border); border-radius:0.65rem; background:#fff; text-align:center;">
+            <div class="muted small" style="font-size:0.8rem;">Approved</div>
+            <div style="font-size:1.6rem; font-weight:800; color:#0284c7; margin-top:0.2rem;">${totalApproved}</div>
+          </div>
+          <div style="padding:0.75rem 0.9rem; border:1px solid var(--border); border-radius:0.65rem; background:#fff; text-align:center;">
+            <div class="muted small" style="font-size:0.8rem;">Attended</div>
+            <div style="font-size:1.6rem; font-weight:800; color:#059669; margin-top:0.2rem;">${counts.attended}</div>
+            <div class="muted small" style="font-size:0.75rem;">${attendedPct}% of approved</div>
+          </div>
+          <div style="padding:0.75rem 0.9rem; border:1px solid var(--border); border-radius:0.65rem; background:#fff; text-align:center;">
+            <div class="muted small" style="font-size:0.8rem;">Absent</div>
+            <div style="font-size:1.6rem; font-weight:800; color:#dc2626; margin-top:0.2rem;">${counts.absent}</div>
+            <div class="muted small" style="font-size:0.75rem;">${absentPct}% of approved</div>
+          </div>
+        </div>
+
+        <div style="border:1px solid var(--border); border-radius:0.7rem; padding:0.9rem 1rem; background:#fff;">
+          <div style="font-weight:700; color:var(--xu-blue); margin-bottom:0.65rem;">Attendee Demographics (Birth Sex)</div>
+          ${!hasDemoData
+            ? '<p class="muted" style="text-align:center; padding:1rem 0;">No attendance recorded yet — demographics will appear once attendance is saved.</p>'
+            : `<div style="display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">
+                <div style="position:relative; width:200px; height:200px; flex-shrink:0;">
+                  <canvas id="admin-seminar-demo-chart" width="200" height="200"></canvas>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:0.55rem;">
+                  <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <span style="width:14px; height:14px; border-radius:3px; background:#1f3c77; display:inline-block; flex-shrink:0;"></span>
+                    <span style="font-size:0.9rem;">Male — <strong>${demographics.male}</strong></span>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <span style="width:14px; height:14px; border-radius:3px; background:#db2777; display:inline-block; flex-shrink:0;"></span>
+                    <span style="font-size:0.9rem;">Female — <strong>${demographics.female}</strong></span>
+                  </div>
+                  ${demographics.other > 0 ? `<div style="display:flex; align-items:center; gap:0.5rem;">
+                    <span style="width:14px; height:14px; border-radius:3px; background:#6b7280; display:inline-block; flex-shrink:0;"></span>
+                    <span style="font-size:0.9rem;">Other / Unspecified — <strong>${demographics.other}</strong></span>
+                  </div>` : ''}
+                  <div class="muted small" style="margin-top:0.3rem; font-size:0.8rem;">Total attendees: ${counts.attended}</div>
+                </div>
+              </div>`
+          }
+        </div>
+      `;
+
+      if (hasDemoData) {
+        const canvas = document.getElementById('admin-seminar-demo-chart');
+        if (canvas && window.Chart) {
+          const chartData = [demographics.male, demographics.female];
+          const chartLabels = ['Male', 'Female'];
+          const chartColors = ['#1f3c77', '#db2777'];
+          if (demographics.other > 0) {
+            chartData.push(demographics.other);
+            chartLabels.push('Other');
+            chartColors.push('#6b7280');
+          }
+          seminarReportChartInstance = new window.Chart(canvas, {
+            type: 'pie',
+            data: {
+              labels: chartLabels,
+              datasets: [{
+                data: chartData,
+                backgroundColor: chartColors,
+                borderWidth: 2,
+                borderColor: '#fff',
+              }],
+            },
+            options: {
+              responsive: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: (ctx) => {
+                      const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                      const pct = total > 0 ? Math.round((ctx.parsed / total) * 100) : 0;
+                      return ` ${ctx.label}: ${ctx.parsed} (${pct}%)`;
+                    },
+                  },
+                },
+              },
+            },
+          });
+        }
+      }
+    } catch (err) {
+      if (seminarReportContentEl) {
+        seminarReportContentEl.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Failed to load report.')}</p>`;
+      }
+    }
+  };
+
+  // ========================
+  // SEMINAR MATERIALS
+  // ========================
+
+  const getFileIcon = (fileURL) => {
+    const ext = String(fileURL || '').split('.').pop().toLowerCase();
+    if (ext === 'pdf') return '📄';
+    if (ext === 'ppt' || ext === 'pptx') return '📊';
+    return '📎';
+  };
+
+  const renderSeminarMaterials = (materials) => {
+    if (!seminarMaterialsListEl) return;
+    if (!Array.isArray(materials) || materials.length === 0) {
+      seminarMaterialsListEl.innerHTML = '<p class="muted">No materials uploaded for this seminar yet.</p>';
+      return;
+    }
+
+    seminarMaterialsListEl.innerHTML = materials
+      .map((m) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; padding:0.6rem 0.75rem; border:1px solid var(--border); border-radius:0.55rem; background:#fff; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:0.55rem; min-width:0;">
+            <span style="font-size:1.3rem; flex-shrink:0;">${getFileIcon(m.fileURL)}</span>
+            <div style="min-width:0;">
+              <div style="font-weight:600; color:var(--xu-blue); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(m.title || 'Untitled')}</div>
+              ${m.description ? `<div class="muted small" style="margin-top:0.1rem;">${escapeHtml(m.description)}</div>` : ''}
+            </div>
+          </div>
+          <div style="display:flex; gap:0.4rem; flex-shrink:0;">
+            <a class="btn secondary" href="${escapeHtml(m.fileURL)}" target="_blank" rel="noopener" style="padding:0.3rem 0.65rem; font-size:0.85rem; text-decoration:none;">View</a>
+            <button class="btn secondary" type="button" data-delete-material="${escapeHtml(m._id || '')}" style="padding:0.3rem 0.65rem; font-size:0.85rem; border-color:#dc2626; color:#b91c1c;">Remove</button>
+          </div>
+        </div>
+      `)
+      .join('');
+
+    seminarMaterialsListEl.querySelectorAll('[data-delete-material]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const materialId = btn.getAttribute('data-delete-material');
+        if (!materialId || !attendanceModalState.seminarId) return;
+        if (!window.confirm('Remove this material? This cannot be undone.')) return;
+        try {
+          const res = await authedFetch(`/api/admin/seminars/${attendanceModalState.seminarId}/materials/${materialId}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data?.message || 'Failed to remove material');
+          if (materialsUploadStatusEl) materialsUploadStatusEl.textContent = data?.message || 'Material removed.';
+          await loadSeminarMaterials(attendanceModalState.seminarId);
+        } catch (err) {
+          if (materialsUploadStatusEl) materialsUploadStatusEl.textContent = err.message || 'Failed to remove material.';
+        }
+      });
+    });
+  };
+
+  const loadSeminarMaterials = async (seminarId) => {
+    if (!seminarMaterialsListEl) return;
+    seminarMaterialsListEl.innerHTML = '<p class="muted">Loading materials…</p>';
+    try {
+      const res = await authedFetch(`/api/admin/seminars/${seminarId}/materials`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Failed to load materials');
+      renderSeminarMaterials(Array.isArray(data) ? data : []);
+    } catch (err) {
+      if (seminarMaterialsListEl) seminarMaterialsListEl.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Failed to load materials.')}</p>`;
+    }
+  };
+
+  seminarMaterialsFormEl?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!attendanceModalState.seminarId || !materialTitleEl || !materialFileEl) return;
+    if (materialsUploadStatusEl) materialsUploadStatusEl.textContent = '';
+
+    const title = materialTitleEl.value.trim();
+    const file = materialFileEl.files?.[0];
+    if (!title || !file) {
+      if (materialsUploadStatusEl) materialsUploadStatusEl.textContent = 'Title and file are required.';
+      return;
+    }
+
+    const uploadBtn = document.getElementById('admin-upload-material-btn');
+    if (uploadBtn) uploadBtn.disabled = true;
+    if (materialsUploadStatusEl) materialsUploadStatusEl.textContent = 'Uploading…';
+
+    try {
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('file', file);
+
+      const res = await authedFetch(`/api/admin/seminars/${attendanceModalState.seminarId}/materials`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Upload failed');
+      if (materialsUploadStatusEl) materialsUploadStatusEl.textContent = 'Material uploaded successfully.';
+      seminarMaterialsFormEl.reset();
+      await loadSeminarMaterials(attendanceModalState.seminarId);
+    } catch (err) {
+      if (materialsUploadStatusEl) materialsUploadStatusEl.textContent = err.message || 'Upload failed.';
+    } finally {
+      if (uploadBtn) uploadBtn.disabled = false;
+    }
+  });
+
+  // ========================
   // APPROVE SELECTED
   // ========================
 
@@ -293,7 +857,7 @@ document.addEventListener('DOMContentLoaded', () => {
     listEl.innerHTML = seminars
       .map((seminar) => {
         const datePart = seminar?.date ? formatDate(seminar.date) : 'No date';
-        const timePart = seminar?.startTime ? ` • ${escapeHtml(seminar.startTime)}` : '';
+        const timePart = seminar?.startTime ? ` • ${escapeHtml(formatTime(seminar.startTime))}` : '';
         return `
           <div style="padding: 0.4rem 0.5rem; border:1px solid var(--border); border-radius:0.55rem; background:#fff;">
             <div style="font-weight: 600; color: var(--xu-blue);">${escapeHtml(seminar?.title || 'Untitled seminar')}</div>
@@ -344,7 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const blob = await res.blob();
           const disposition = res.headers.get('content-disposition') || '';
           const match = /filename="?([^";]+)"?/i.exec(disposition);
-          const name = match?.[1] || `GADIMS-Certificate-${registrationId}.png`;
+          const name = match?.[1] || `GIMS-Certificate-${registrationId}.png`;
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -366,7 +930,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (profileEmailEl) profileEmailEl.textContent = row.email || '—';
     if (profileDepartmentEl) profileDepartmentEl.textContent = row.department || '—';
     if (profilePositionEl) profilePositionEl.textContent = row.position || '—';
-    if (profileStatusEl) profileStatusEl.textContent = row.seminarStatus || '—';
+    if (profileStatusEl) {
+      const baseStatus = row.seminarStatus || '—';
+      const accountText = normalizeAccountStatus(row.accountStatus) === 'deactivated' ? ' • Account: Deactivated' : '';
+      profileStatusEl.textContent = `${baseStatus}${accountText}`;
+    }
     if (profileReservedCountEl) profileReservedCountEl.textContent = '0';
     if (profileTakenCountEl) profileTakenCountEl.textContent = '0';
     if (profileCertificatesCountEl) profileCertificatesCountEl.textContent = '0';
@@ -400,7 +968,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (profileStatusEl) {
         const statusLabel = profile.seminarStatus || row.seminarStatus || '—';
         const completionText = profile.completionText ? ` (${profile.completionText})` : '';
-        profileStatusEl.textContent = `${statusLabel}${completionText}`;
+        const accountText = normalizeAccountStatus(profile.accountStatus || row.accountStatus) === 'deactivated'
+          ? ' • Account: Deactivated'
+          : '';
+        profileStatusEl.textContent = `${statusLabel}${completionText}${accountText}`;
       }
 
       if (profileReservedCountEl) profileReservedCountEl.textContent = String(reservedSeminars.length);
@@ -422,6 +993,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const openCreateSeminarModal = () => {
     if (!createSeminarModalEl) return;
     if (createSeminarStatusEl) createSeminarStatusEl.textContent = '';
+    calState.create.sessions = new Map();
+    const toggle = document.getElementById('create-multi-session-toggle');
+    if (toggle) toggle.checked = false;
+    const defaultTypeRadio = document.querySelector('input[name="create-multiSessionType"][value="all"]');
+    if (defaultTypeRadio) defaultTypeRadio.checked = true;
+    setCalendarMode('create', false);
     createSeminarModalEl.style.display = 'flex';
   };
 
@@ -471,6 +1048,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!isSeminars) {
       closeSeminarParticipantsModal();
     }
+    closeDeletedSeminarsModal();
+    closeAccountStatusMenu();
   };
 
   const closeEmployeeProfileModal = () => {
@@ -498,22 +1077,69 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const closeSeminarParticipantsModal = () => {
     if (seminarParticipantsModalEl) seminarParticipantsModalEl.style.display = 'none';
+    if (seminarReportChartInstance) {
+      seminarReportChartInstance.destroy();
+      seminarReportChartInstance = null;
+    }
+    if (seminarReportContentEl) seminarReportContentEl.innerHTML = '<p class="muted">Loading report…</p>';
   };
 
   const openSeminarEditModal = (seminar) => {
     if (!seminarEditForm || !seminarEditModalEl) return;
     seminarEditForm.elements.seminarId.value = seminar._id;
     seminarEditForm.elements.title.value = seminar.title || '';
-    seminarEditForm.elements.startTime.value = seminar.startTime || '';
-    seminarEditForm.elements.date.value = String(seminar.date || '').slice(0, 10);
-    seminarEditForm.elements.durationHours.value = seminar.durationHours || 1;
     seminarEditForm.elements.capacity.value = seminar.capacity || 1;
     seminarEditForm.elements.mandatory.value = seminar.mandatory ? 'true' : 'false';
     seminarEditForm.elements.description.value = seminar.description || '';
     const editAutoSendCheckbox = document.getElementById('edit-auto-send-cert-checkbox');
     if (editAutoSendCheckbox) editAutoSendCheckbox.checked = Boolean(seminar.autoSendCertificates);
-    const dateInput = seminarEditForm.querySelector('input[name="date"]');
-    if (dateInput) dateInput.min = getTodayDateInputValue();
+
+    // Populate sessions
+    const sessions = Array.isArray(seminar.sessions) ? seminar.sessions : [];
+    const isMulti = sessions.length > 1;
+    const toggle = document.getElementById('edit-multi-session-toggle');
+    if (toggle) toggle.checked = isMulti;
+
+    calState.edit.sessions = new Map();
+
+    if (isMulti) {
+      for (const s of sessions) {
+        const dateStr = String(s.date || '').slice(0, 10);
+        if (!dateStr) continue;
+        calState.edit.sessions.set(dateStr, {
+          startTime: s.startTime || '08:00',
+          durationHours: s.durationHours || 1,
+          _id: s._id,
+          locked: Boolean(s.isHeld),
+        });
+      }
+      // Navigate calendar to month of first session
+      const firstDateStr = Array.from(calState.edit.sessions.keys()).sort()[0];
+      if (firstDateStr) {
+        const d = new Date(`${firstDateStr}T00:00:00`);
+        // Show current month if first session is in the past (already held)
+        const now = new Date();
+        calState.edit.year = d < now ? now.getFullYear() : d.getFullYear();
+        calState.edit.month = d < now ? now.getMonth() : d.getMonth();
+      }
+    } else {
+      // Single session — populate date/time/duration inputs
+      const src = sessions.length === 1 ? sessions[0] : seminar;
+      seminarEditForm.elements.date.value = String(src.date || seminar.date || '').slice(0, 10);
+      seminarEditForm.elements.startTime.value = src.startTime || seminar.startTime || '';
+      seminarEditForm.elements.durationHours.value = src.durationHours || seminar.durationHours || 1;
+      const dateInput = seminarEditForm.querySelector('input[name="date"]');
+      if (dateInput) dateInput.min = getTodayDateInputValue();
+    }
+
+    // Pre-select multiSessionType radio
+    if (isMulti) {
+      const editSessionTypeVal = seminar.multiSessionType === 'pick-one' ? 'pick-one' : 'all';
+      const editSessionTypeRadio = document.querySelector(`input[name="edit-multiSessionType"][value="${editSessionTypeVal}"]`);
+      if (editSessionTypeRadio) editSessionTypeRadio.checked = true;
+    }
+
+    setCalendarMode('edit', isMulti);
     if (seminarEditStatusEl) seminarEditStatusEl.textContent = '';
     seminarEditModalEl.style.display = 'flex';
   };
@@ -588,7 +1214,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const openParticipantsModal = async (seminar) => {
     if (!seminarParticipantsModalEl || !seminarParticipantsMetaEl) return;
-    seminarParticipantsMetaEl.textContent = `${seminar.title || 'Seminar'} — ${formatDate(seminar.date)} ${seminar.startTime || ''}`;
+    const isAlreadyOpen = seminarParticipantsModalEl.style.display === 'flex';
+    const savedTab = isAlreadyOpen ? attendanceModalState.currentTab : 'pre-registered';
+
+    seminarParticipantsMetaEl.textContent = `${seminar.title || 'Seminar'} — ${formatDate(seminar.date)} ${formatTime(seminar.startTime)}`;
     if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = 'Loading...';
     if (preRegStatusEl) preRegStatusEl.textContent = '';
     if (seminarParticipantsListEl) seminarParticipantsListEl.innerHTML = '';
@@ -599,11 +1228,16 @@ document.addEventListener('DOMContentLoaded', () => {
       isHeld: Boolean(seminar.isHeld),
       rows: [],
       attendanceSaved: false,
-      currentTab: 'pre-registered',
+      currentTab: savedTab,
     };
 
-    // Start on pre-registered tab
-    switchParticipantsTab('pre-registered');
+    if (!isAlreadyOpen) {
+      if (materialsUploadStatusEl) materialsUploadStatusEl.textContent = '';
+      if (seminarMaterialsListEl) seminarMaterialsListEl.innerHTML = '';
+      if (seminarMaterialsFormEl) seminarMaterialsFormEl.reset();
+    }
+
+    switchParticipantsTab(savedTab);
     seminarParticipantsModalEl.style.display = 'flex';
 
     try {
@@ -620,7 +1254,7 @@ document.addEventListener('DOMContentLoaded', () => {
         isHeld,
         rows,
         attendanceSaved: rows.some((r) => ['attended', 'absent'].includes(String(r.status || '').toLowerCase())),
-        currentTab: attendanceModalState.currentTab,
+        currentTab: savedTab,
       };
 
       // Render pre-registered tab
@@ -672,8 +1306,11 @@ document.addEventListener('DOMContentLoaded', () => {
               <span class="badge badge-soft" style="white-space:nowrap;">${escapeHtml(mandatoryLabel)}</span>
             </div>
 
-            <div class="muted small">${escapeHtml(formatDate(seminar.date))} - ${escapeHtml(seminar.startTime || '')}</div>
-            <div class="muted small">Duration: ${escapeHtml(seminar.durationHours || 0)} hour(s)</div>
+            <div class="muted small">${escapeHtml(formatDate(seminar.date))} - ${escapeHtml(formatTime(seminar.startTime))}</div>
+            ${Array.isArray(seminar.sessions) && seminar.sessions.length > 1
+              ? `<div class="muted small" style="color:var(--xu-blue); font-weight:600;">📅 ${seminar.sessions.length} sessions &bull; ${seminar.multiSessionType === 'pick-one' ? 'Pick one day' : 'Attend all'}</div>`
+              : `<div class="muted small">Duration: ${escapeHtml(seminar.durationHours || 0)} hour(s)</div>`
+            }
             <div class="muted small">Reserved: ${escapeHtml(registeredCount)}/${escapeHtml(capacity)}</div>
             <div class="muted small">Status: ${escapeHtml(heldLabel)} ${autoSendLabel ? `• <span style="color:#059669;">${escapeHtml(autoSendLabel)}</span>` : ''}</div>
             <div class="muted" style="font-size: 0.92rem; line-height:1.4;">${escapeHtml(seminar.description || '')}</div>
@@ -725,19 +1362,95 @@ document.addEventListener('DOMContentLoaded', () => {
       button.addEventListener('click', async () => {
         const seminar = currentSeminars.find((item) => String(item._id) === String(button.getAttribute('data-seminar-delete')));
         if (!seminar) return;
-        const ok = window.confirm(`Delete seminar "${seminar.title}"? This will remove its registrations.`);
+        const ok = window.confirm(`Delete seminar "${seminar.title}"? It will move to Recently Deleted for 7 days before permanent removal.`);
         if (!ok) return;
         try {
           const res = await authedFetch(`/api/admin/seminars/${seminar._id}`, { method: 'DELETE' });
           const data = await res.json();
           if (!res.ok) throw new Error(data?.message || 'Failed to delete seminar');
-          if (seminarsStatusEl) seminarsStatusEl.textContent = 'Seminar deleted successfully.';
+          if (seminarsStatusEl) seminarsStatusEl.textContent = data?.message || 'Seminar moved to Recently Deleted.';
+          await loadSummary();
           await loadSeminars();
         } catch (err) {
           if (seminarsStatusEl) seminarsStatusEl.textContent = err.message || 'Failed to delete seminar.';
         }
       });
     });
+  };
+
+  const renderDeletedSeminars = (seminars) => {
+    if (!deletedSeminarsListEl) return;
+    if (!Array.isArray(seminars) || seminars.length === 0) {
+      deletedSeminarsListEl.innerHTML = '<p class="muted">No recently deleted seminars.</p>';
+      return;
+    }
+
+    deletedSeminarsListEl.innerHTML = seminars
+      .map((seminar) => {
+        return `
+          <article class="card" style="box-shadow:none; padding:0.75rem 0.9rem;">
+            <div style="display:flex; justify-content:space-between; gap:0.8rem; align-items:flex-start; flex-wrap:wrap;">
+              <div>
+                <div style="font-weight:700; color:var(--xu-blue);">${escapeHtml(seminar?.title || 'Untitled seminar')}</div>
+                <div class="muted small" style="margin-top:0.18rem;">${escapeHtml(formatDate(seminar?.date))} - ${escapeHtml(formatTime(seminar?.startTime))}</div>
+                <div class="muted small" style="margin-top:0.1rem;">${escapeHtml(getRetentionDaysLeftText(seminar?.deletePermanentlyAt))}</div>
+              </div>
+              <div style="display:flex; gap:0.45rem; flex-wrap:wrap;">
+                <button class="btn" type="button" data-seminar-restore="${escapeHtml(seminar?._id || '')}">Restore</button>
+                <button class="btn secondary" type="button" data-seminar-permanent-delete="${escapeHtml(seminar?._id || '')}" style="border-color:#dc2626; color:#b91c1c;">Delete Permanently</button>
+              </div>
+            </div>
+          </article>
+        `;
+      })
+      .join('');
+
+    deletedSeminarsListEl.querySelectorAll('[data-seminar-restore]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const seminarId = button.getAttribute('data-seminar-restore');
+        if (!seminarId) return;
+        try {
+          const res = await authedFetch(`/api/admin/seminars/${seminarId}/restore`, { method: 'POST' });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data?.message || 'Failed to restore seminar');
+          if (deletedSeminarsStatusEl) deletedSeminarsStatusEl.textContent = data?.message || 'Seminar restored successfully.';
+          await loadSummary();
+          await loadSeminars();
+        } catch (err) {
+          if (deletedSeminarsStatusEl) deletedSeminarsStatusEl.textContent = err.message || 'Failed to restore seminar.';
+        }
+      });
+    });
+
+    deletedSeminarsListEl.querySelectorAll('[data-seminar-permanent-delete]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const seminarId = button.getAttribute('data-seminar-permanent-delete');
+        if (!seminarId) return;
+        const ok = window.confirm('Permanently delete this seminar? This cannot be undone.');
+        if (!ok) return;
+        try {
+          const res = await authedFetch(`/api/admin/seminars/${seminarId}/permanent`, { method: 'DELETE' });
+          const contentType = String(res.headers.get('content-type') || '').toLowerCase();
+          const data = contentType.includes('application/json') ? await res.json() : { message: await res.text() };
+          if (!res.ok) throw new Error(data?.message || 'Failed to permanently delete seminar');
+          if (deletedSeminarsStatusEl) deletedSeminarsStatusEl.textContent = data?.message || 'Seminar permanently deleted.';
+          await loadSummary();
+          await loadSeminars();
+        } catch (err) {
+          if (deletedSeminarsStatusEl) deletedSeminarsStatusEl.textContent = err.message || 'Failed to permanently delete seminar.';
+        }
+      });
+    });
+  };
+
+  const loadDeletedSeminars = async () => {
+    if (deletedSeminarsStatusEl) deletedSeminarsStatusEl.textContent = '';
+    if (deletedSeminarsListEl) deletedSeminarsListEl.innerHTML = '';
+    const deletedRes = await authedFetch('/api/admin/seminars/deleted');
+    const deletedData = await deletedRes.json();
+    if (!deletedRes.ok) throw new Error(deletedData?.message || 'Failed to load recently deleted seminars');
+    deletedSeminars = Array.isArray(deletedData) ? deletedData : [];
+    renderDeletedSeminars(deletedSeminars);
   };
 
   const populateSeminarYearFilter = (seminars) => {
@@ -768,11 +1481,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return currentSeminars.filter((seminar) => {
       const title = String(seminar?.title || '').toLowerCase();
-      const description = String(seminar?.description || '').toLowerCase();
       const date = new Date(seminar?.date);
       const isValidDate = !Number.isNaN(date.getTime());
 
-      const queryMatch = !query || title.includes(query) || description.includes(query);
+      const queryMatch = !query || title.includes(query);
       const monthMatch = !month || (isValidDate && String(date.getMonth()) === month);
       const yearMatch = !year || (isValidDate && String(date.getFullYear()) === year);
 
@@ -807,12 +1519,19 @@ document.addEventListener('DOMContentLoaded', () => {
       currentSeminars = sortSeminarsNearestToFarthest(Array.isArray(data) ? data : []);
       populateSeminarYearFilter(currentSeminars);
       applySeminarFilters();
+      if (isDeletedSeminarsModalOpen) {
+        await loadDeletedSeminars();
+      }
     } catch (err) {
       if (seminarsStatusEl) seminarsStatusEl.textContent = err.message || 'Failed to load seminars.';
+      if (isDeletedSeminarsModalOpen && deletedSeminarsStatusEl) {
+        deletedSeminarsStatusEl.textContent = err.message || 'Failed to load recently deleted seminars.';
+      }
     }
   };
 
   const renderEmployeesTable = (rows) => {
+    closeAccountStatusMenu();
     if (!Array.isArray(rows) || rows.length === 0) {
       employeesTableEl.innerHTML = '<p class="muted">No employees found.</p>';
       return;
@@ -824,13 +1543,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const checkboxStyle = checkboxesEnabled ? '' : 'display:none';
         const isComplete = row.seminarStatus === 'Complete';
         const statusBadge = `<span class="badge ${isComplete ? 'badge-green' : 'badge-red'}">${row.seminarStatus}</span>`;
+        const accountBadge = getAccountStatusBadge(row.accountStatus);
         return `
           <tr>
             <td><button class="table-link-btn" type="button" data-employee-profile="${row.id}">${escapeHtml(row.name)}</button></td>
             <td><input type="checkbox" class="admin-row-check" value="${row.id}" style="${checkboxStyle}" /></td>
-            <td>${row.employeeId}</td>
+            <td>${escapeHtml(row.employeeId)}</td>
             <td>${escapeHtml(row.department)}</td>
             <td>${statusBadge}</td>
+            <td><button class="table-link-btn" type="button" data-employee-account-menu="${row.id}">${accountBadge}</button></td>
           </tr>
         `;
       })
@@ -845,6 +1566,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <th>Employee ID</th>
             <th>Department</th>
             <th>Seminar Status</th>
+            <th>Account</th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
@@ -865,16 +1587,32 @@ document.addEventListener('DOMContentLoaded', () => {
         if (row) await showEmployeeProfile(row);
       });
     });
+
+    employeesTableEl.querySelectorAll('[data-employee-account-menu]').forEach((button) => {
+      const row = rows.find((item) => String(item.id) === String(button.getAttribute('data-employee-account-menu')));
+      if (!row) return;
+      button.addEventListener('click', (event) => {
+        openAccountStatusMenu(event, row);
+      });
+      button.addEventListener('contextmenu', (event) => {
+        openAccountStatusMenu(event, row);
+      });
+    });
   };
 
   const loadDepartmentsAndEmployees = async () => {
     employeesStatusEl.textContent = '';
     employeesTableEl.innerHTML = '';
     try {
+      const name = String(employeeSearchEl?.value || '').trim();
       const department = departmentFilterEl?.value || '';
-      const url = department
-        ? `/api/admin/employees?department=${encodeURIComponent(department)}`
-        : '/api/admin/employees';
+      const accountStatus = accountStatusFilterEl?.value || 'active';
+      const params = new URLSearchParams();
+      if (name) params.set('name', name);
+      if (department) params.set('department', department);
+      if (accountStatus) params.set('accountStatus', accountStatus);
+      const query = params.toString();
+      const url = query ? `/api/admin/employees?${query}` : '/api/admin/employees';
       const res = await authedFetch(url, { method: 'GET' });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Failed to load employees');
@@ -894,8 +1632,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       employeesStatusEl.textContent = err.message || 'Failed to load employees.';
       if (String(err.message || '').toLowerCase().includes('invalid token')) {
-        window.localStorage.removeItem('gadims_employee_token');
-        window.localStorage.removeItem('gadims_role');
+        window.localStorage.removeItem('gims_employee_token');
+        window.localStorage.removeItem('gims_role');
         window.location.href = '/';
       }
     }
@@ -914,7 +1652,7 @@ document.addEventListener('DOMContentLoaded', () => {
     await loadSummary();
     await loadDepartmentsAndEmployees();
     await loadSeminars();
-    window.localStorage.setItem('gadims_role', 'admin');
+    window.localStorage.setItem('gims_role', 'admin');
   };
 
   // ========================
@@ -976,6 +1714,22 @@ document.addEventListener('DOMContentLoaded', () => {
     applySeminarFilters();
   });
 
+  toggleDeletedSeminarsBtn?.addEventListener('click', async () => {
+    setDeletedSeminarsModalVisibility(true);
+    try {
+      await loadDeletedSeminars();
+    } catch (err) {
+      if (deletedSeminarsStatusEl) {
+        deletedSeminarsStatusEl.textContent = err.message || 'Failed to load recently deleted seminars.';
+      }
+    }
+  });
+
+  deletedSeminarsCloseBtn?.addEventListener('click', closeDeletedSeminarsModal);
+  deletedSeminarsModalEl?.addEventListener('click', (event) => {
+    if (event.target === deletedSeminarsModalEl) closeDeletedSeminarsModal();
+  });
+
   if (createSeminarDateInput) {
     createSeminarDateInput.min = getTodayDateInputValue();
   }
@@ -983,6 +1737,11 @@ document.addEventListener('DOMContentLoaded', () => {
   createSeminarClearBtn?.addEventListener('click', () => {
     createSeminarForm?.reset();
     if (createSeminarStatusEl) createSeminarStatusEl.textContent = '';
+    calState.create.sessions = new Map();
+    const toggle = document.getElementById('create-multi-session-toggle');
+    if (toggle) toggle.checked = false;
+    setCalendarMode('create', false);
+    if (createSeminarDateInput) createSeminarDateInput.min = getTodayDateInputValue();
   });
 
   createSeminarCloseBtn?.addEventListener('click', closeCreateSeminarModal);
@@ -1096,10 +1855,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
+      closeAccountStatusMenu();
+      closeDeletedSeminarsModal();
       closeEmployeeProfileModal();
       closeSeminarEditModal();
       closeSeminarParticipantsModal();
     }
+  });
+
+  document.addEventListener('click', () => {
+    closeAccountStatusMenu();
   });
 
   seminarEditForm?.addEventListener('submit', async (event) => {
@@ -1108,31 +1873,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const formData = new FormData(seminarEditForm);
     const formBody = Object.fromEntries(formData.entries());
     const seminarId = formBody.seminarId;
-    const today = getTodayDateInputValue();
     if (!seminarId) return;
-    if (!formBody.date || String(formBody.date) < today) {
-      if (seminarEditStatusEl) seminarEditStatusEl.textContent = 'Seminar date cannot be in the past.';
-      return;
-    }
 
+    const isMulti = document.getElementById('edit-multi-session-toggle')?.checked;
     const editAutoSendCheckbox = document.getElementById('edit-auto-send-cert-checkbox');
     const autoSendCertificates = editAutoSendCheckbox?.checked ? 'true' : 'false';
+
+    const payload = {
+      title: formBody.title,
+      description: formBody.description,
+      mandatory: formBody.mandatory,
+      capacity: formBody.capacity,
+      autoSendCertificates,
+      certificateReleaseMode: autoSendCertificates === 'true' ? 'automatic' : 'evaluation',
+    };
+
+    if (isMulti) {
+      const sessions = collectSessions('edit');
+      if (!sessions.length) {
+        if (seminarEditStatusEl) seminarEditStatusEl.textContent = 'Select at least one session on the calendar.';
+        return;
+      }
+      payload.sessions = sessions;
+      const sessionTypeInput = document.querySelector('input[name="edit-multiSessionType"]:checked');
+      payload.multiSessionType = sessions.length > 1 ? (sessionTypeInput?.value || 'all') : 'all';
+    } else {
+      const today = getTodayDateInputValue();
+      if (!formBody.date || String(formBody.date) < today) {
+        if (seminarEditStatusEl) seminarEditStatusEl.textContent = 'Seminar date cannot be in the past.';
+        return;
+      }
+      payload.date = formBody.date;
+      payload.startTime = formBody.startTime;
+      payload.durationHours = formBody.durationHours;
+    }
 
     try {
       const res = await authedFetch(`/api/admin/seminars/${seminarId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: formBody.title,
-          description: formBody.description,
-          date: formBody.date,
-          startTime: formBody.startTime,
-          durationHours: formBody.durationHours,
-          mandatory: formBody.mandatory,
-          capacity: formBody.capacity,
-          autoSendCertificates,
-          certificateReleaseMode: autoSendCertificates === 'true' ? 'automatic' : 'evaluation',
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Failed to update seminar');
@@ -1169,24 +1949,53 @@ document.addEventListener('DOMContentLoaded', () => {
     const formData = new FormData(createSeminarForm);
     const body = Object.fromEntries(formData.entries());
     const releaseMode = String(body.certificateReleaseMode || 'evaluation').toLowerCase();
-    body.certificateReleaseMode = releaseMode;
-    body.autoSendCertificates = releaseMode === 'automatic' ? 'true' : 'false';
+    const isMulti = document.getElementById('create-multi-session-toggle')?.checked;
 
-    const today = getTodayDateInputValue();
-    if (!body.date || String(body.date) < today) {
-      if (createSeminarStatusEl) createSeminarStatusEl.textContent = 'Seminar date cannot be in the past.';
-      return;
+    const payload = {
+      title: body.title,
+      description: body.description,
+      capacity: body.capacity,
+      mandatory: body.mandatory,
+      certificateReleaseMode: releaseMode,
+      autoSendCertificates: releaseMode === 'automatic' ? 'true' : 'false',
+    };
+
+    if (isMulti) {
+      const sessions = collectSessions('create');
+      if (!sessions.length) {
+        if (createSeminarStatusEl) createSeminarStatusEl.textContent = 'Select at least one session date on the calendar.';
+        return;
+      }
+      payload.sessions = sessions;
+      const sessionTypeInput = document.querySelector('input[name="create-multiSessionType"]:checked');
+      payload.multiSessionType = sessions.length > 1 ? (sessionTypeInput?.value || 'all') : 'all';
+    } else {
+      const today = getTodayDateInputValue();
+      if (!body.date || String(body.date) < today) {
+        if (createSeminarStatusEl) createSeminarStatusEl.textContent = 'Seminar date cannot be in the past.';
+        return;
+      }
+      payload.date = body.date;
+      payload.startTime = body.startTime;
+      payload.durationHours = body.durationHours;
     }
+
     try {
       const res = await authedFetch('/api/admin/seminars', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Seminar creation failed');
       if (createSeminarStatusEl) createSeminarStatusEl.textContent = 'Seminar created successfully.';
       createSeminarForm.reset();
+      calState.create.sessions = new Map();
+      const toggle = document.getElementById('create-multi-session-toggle');
+      if (toggle) toggle.checked = false;
+      const defaultTypeRadio = document.querySelector('input[name="create-multiSessionType"][value="all"]');
+      if (defaultTypeRadio) defaultTypeRadio.checked = true;
+      setCalendarMode('create', false);
       if (createSeminarDateInput) createSeminarDateInput.min = getTodayDateInputValue();
       await loadSummary();
       await loadDepartmentsAndEmployees();
@@ -1202,6 +2011,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   departmentFilterEl?.addEventListener('change', async () => {
+    await loadDepartmentsAndEmployees();
+  });
+
+  employeeSearchEl?.addEventListener('input', () => {
+    if (employeeSearchDebounceId) {
+      window.clearTimeout(employeeSearchDebounceId);
+    }
+    employeeSearchDebounceId = window.setTimeout(async () => {
+      await loadDepartmentsAndEmployees();
+    }, 220);
+  });
+
+  accountStatusFilterEl?.addEventListener('change', async () => {
     await loadDepartmentsAndEmployees();
   });
 
@@ -1243,7 +2065,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'gadims_employees.csv';
+      a.download = 'gims_employees.csv';
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1254,18 +2076,21 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   logoutBtn?.addEventListener('click', () => {
-    window.localStorage.removeItem('gadims_employee_token');
-    window.localStorage.removeItem('gadims_role');
+    window.localStorage.removeItem('gims_employee_token');
+    window.localStorage.removeItem('gims_role');
     adminToken = null;
     window.location.href = '/';
   });
 
+  initCalendarToggle('create');
+  initCalendarToggle('edit');
   setTopbarFromToken();
+  setDeletedSeminarsModalVisibility(false);
   showNavModule('dashboard');
   loadAll().catch((err) => {
     employeesStatusEl.textContent = err.message || 'Failed to load admin dashboard.';
-    window.localStorage.removeItem('gadims_employee_token');
-    window.localStorage.removeItem('gadims_role');
+    window.localStorage.removeItem('gims_employee_token');
+    window.localStorage.removeItem('gims_role');
     setTimeout(() => {
       window.location.href = '/';
     }, 600);

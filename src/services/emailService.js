@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import Employee from '../models/Employee.js';
+import Seminar from '../models/Seminar.js';
 
 let transporterPromise = null;
 
@@ -55,9 +56,9 @@ const sendMailWithRetry = async (mailOptions) => {
 
 export const sendVerificationPinEmail = async (email, code, expiresAt) => {
   const mailOptions = {
-    from: `"GADIMS" <${process.env.GMAIL_USER}>`,
+    from: `"GIMS" <${process.env.GMAIL_USER}>`,
     to: email,
-    subject: 'GADIMS Account Verification',
+    subject: 'GIMS Account Verification',
     text: `Your verification PIN is: ${code}
 
 This code will expire in 5 minutes (until ${expiresAt.toLocaleTimeString()}).
@@ -69,10 +70,10 @@ This code will expire in 5 minutes (until ${expiresAt.toLocaleTimeString()}).
 
 export const sendPasswordResetPinEmail = async (email, code, expiresAt) => {
   const mailOptions = {
-    from: `"GADIMS" <${process.env.GMAIL_USER}>`,
+    from: `"GIMS" <${process.env.GMAIL_USER}>`,
     to: email,
-    subject: 'GADIMS Password Reset PIN',
-    text: `A password reset was requested for your GADIMS account.
+    subject: 'GIMS Password Reset PIN',
+    text: `A password reset was requested for your GIMS account.
 
 Your verification PIN is: ${code}
 
@@ -86,10 +87,10 @@ If you did not request this, you can ignore this message.`,
 
 export const sendTemporaryPasswordEmail = async (email, tempPassword) => {
   const mailOptions = {
-    from: `"GADIMS" <${process.env.GMAIL_USER}>`,
+    from: `"GIMS" <${process.env.GMAIL_USER}>`,
     to: email,
-    subject: 'GADIMS Temporary Password Reset',
-    text: `Your GADIMS password has been reset by an administrator.
+    subject: 'GIMS Temporary Password Reset',
+    text: `Your GIMS password has been reset by an administrator.
 
 Temporary password: ${tempPassword}
 
@@ -121,11 +122,24 @@ Xavier University GAD Office`,
 
 export const sendBulkReminders = async () => {
   const employees = await Employee.find();
+  const activeSeminars = await Seminar.find({ isDeleted: { $ne: true } }).select('_id').lean();
+  const activeSeminarIdSet = new Set(activeSeminars.map((s) => String(s._id)));
+
+  const countActiveAttended = (seminarIds) => {
+    if (!Array.isArray(seminarIds) || seminarIds.length === 0) return 0;
+    const unique = new Set(seminarIds.map((id) => String(id)));
+    let count = 0;
+    unique.forEach((id) => {
+      if (activeSeminarIdSet.has(id)) count += 1;
+    });
+    return count;
+  };
+
   let sent = 0;
 
   for (const employee of employees) {
     const required = Number(employee.requiredSeminarsPerYear || 5);
-    const completed = Array.isArray(employee.seminarsAttended) ? employee.seminarsAttended.length : 0;
+    const completed = countActiveAttended(employee.seminarsAttended);
     const remaining = required - completed;
     if (remaining > 0) {
       try {

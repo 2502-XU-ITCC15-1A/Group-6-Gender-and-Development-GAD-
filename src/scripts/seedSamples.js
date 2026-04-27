@@ -13,9 +13,9 @@ const run = async () => {
 
     // Sample employee
     const employeeEmail = 'juan.delacruz@xu.edu.ph';
-    const employeePassword = 'GadimsEmp!123';
+    const employeePassword = 'GimsEmp!123';
     const mariaEmail = 'maria.santos@xu.edu.ph';
-    const mariaPassword = 'GadimsMaria!123';
+    const mariaPassword = 'GimsMaria!123';
 
     let emp = await Employee.findOne({ email: employeeEmail.toLowerCase() });
     if (!emp) {
@@ -114,12 +114,12 @@ const run = async () => {
 
     // Sample admin
     const adminEmail = 'gad.admin@xu.edu.ph';
-    const adminPassword = 'GadimsAdmin!123';
+    const adminPassword = 'GimsAdmin!123';
 
     let adminEmp = await Employee.findOne({ email: adminEmail.toLowerCase() });
     if (!adminEmp) {
       adminEmp = await Employee.create({
-        name: 'GADIMS Admin',
+        name: 'GIMS Admin',
         email: adminEmail.toLowerCase(),
         department: 'GAD Office',
         position: 'Administrator',

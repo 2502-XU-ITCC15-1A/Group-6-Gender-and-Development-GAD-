@@ -6,6 +6,7 @@ import fs from 'fs';
 
 import Employee from '../models/Employee.js';
 import Seminar from '../models/Seminar.js';
+import Attendance from '../models/Attendance.js';
 import Registration from '../models/Registration.js';
 import Notification from '../models/Notification.js';
 import LearningMaterial from '../models/LearningMaterial.js';
@@ -43,12 +44,31 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 },
 });
 
+const materialsUpload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const allowedExts = ['.pdf', '.ppt', '.pptx'];
+    const allowedMime = [
+      'application/pdf',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ];
+    if (allowedExts.includes(ext) || allowedMime.includes(file.mimetype)) {
+      return cb(null, true);
+    }
+    cb(new Error('Only PDF and PowerPoint (.ppt, .pptx) files are allowed.'));
+  },
+});
+
+
 const authMiddleware = (req, res, next) => {
   const header = req.headers.authorization;
   if (!header) return res.status(401).json({ message: 'Missing Authorization header' });
   const token = header.replace('Bearer ', '');
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'gadims-secret');
+    const payload = jwt.verify(token, process.env.JWT_SECRET || 'gims-secret');
     if (payload.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
     req.user = payload;
     next();
@@ -78,6 +98,54 @@ const normalizeCertificateReleaseMode = ({ certificateReleaseMode, autoSendCerti
   return String(autoSendCertificates).toLowerCase() === 'true' ? 'automatic' : 'evaluation';
 };
 
+const SEMINAR_DELETE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+const permanentlyDeleteSeminarsByIds = async (seminarIds) => {
+  if (!Array.isArray(seminarIds) || seminarIds.length === 0) return;
+  await Registration.deleteMany({ seminarID: { $in: seminarIds } });
+  await Attendance.deleteMany({ seminar: { $in: seminarIds } });
+  await Notification.deleteMany({ seminarID: { $in: seminarIds } });
+  await Evaluation.deleteMany({ seminarID: { $in: seminarIds } });
+  await Employee.updateMany(
+    { seminarsAttended: { $in: seminarIds } },
+    { $pull: { seminarsAttended: { $in: seminarIds } } }
+  );
+  await Seminar.deleteMany({ _id: { $in: seminarIds } });
+};
+
+const purgeExpiredDeletedSeminars = async () => {
+  const now = new Date();
+  const expired = await Seminar.find({
+    isDeleted: true,
+    deletePermanentlyAt: { $lte: now },
+  })
+    .select('_id')
+    .lean();
+
+  if (!expired.length) return;
+
+  await permanentlyDeleteSeminarsByIds(expired.map((s) => s._id));
+};
+
+const findActiveSeminarById = (id) => {
+  return Seminar.findOne({ _id: id, isDeleted: { $ne: true } });
+};
+
+const buildActiveSeminarIdSet = async () => {
+  const activeSeminars = await Seminar.find({ isDeleted: { $ne: true } }).select('_id').lean();
+  return new Set(activeSeminars.map((s) => String(s._id)));
+};
+
+const countActiveAttendedSeminars = (seminarIds, activeSeminarIdSet) => {
+  if (!Array.isArray(seminarIds) || seminarIds.length === 0) return 0;
+  const unique = new Set(seminarIds.map((id) => String(id)));
+  let count = 0;
+  unique.forEach((id) => {
+    if (activeSeminarIdSet.has(id)) count += 1;
+  });
+  return count;
+};
+
 router.post('/seed-admin', async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
@@ -87,7 +155,7 @@ router.post('/seed-admin', async (req, res, next) => {
     let employee = await Employee.findOne({ email: email.toLowerCase().trim() });
     if (!employee) {
       employee = await Employee.create({
-        name: name || 'GADIMS Admin',
+        name: name || 'GIMS Admin',
         email: email.toLowerCase().trim(),
         department: 'GAD Office',
         position: 'Administrator',
@@ -113,7 +181,7 @@ router.post('/seed-admin', async (req, res, next) => {
 
     const token = jwt.sign(
       { id: employee._id, role: 'admin', email: employee.email },
-      process.env.JWT_SECRET || 'gadims-secret',
+      process.env.JWT_SECRET || 'gims-secret',
       { expiresIn: '8h' }
     );
 
@@ -144,7 +212,7 @@ router.post('/login', async (req, res, next) => {
 
     const token = jwt.sign(
       { id, role: 'admin', email: email.toLowerCase().trim() },
-      process.env.JWT_SECRET || 'gadims-secret',
+      process.env.JWT_SECRET || 'gims-secret',
       { expiresIn: '8h' }
     );
 
@@ -157,31 +225,27 @@ router.post('/login', async (req, res, next) => {
 // Dashboard summary
 router.get('/reports/summary', authMiddleware, async (req, res, next) => {
   try {
-    const totalEmployees = await Employee.countDocuments();
+    const activeFilter = { role: 'employee', accountStatus: { $ne: 'deactivated' } };
+    const inactiveFilter = { role: 'employee', accountStatus: 'deactivated' };
+    const totalEmployees = await Employee.countDocuments(activeFilter);
+    const deactivatedEmployees = await Employee.countDocuments(inactiveFilter);
 
-    const compliantAgg = await Employee.aggregate([
-      {
-        $project: {
-          seminarsAttendedCount: { $size: { $ifNull: ['$seminarsAttended', []] } },
-          requiredSeminarsPerYear: { $ifNull: ['$requiredSeminarsPerYear', 5] },
-        },
-      },
-      {
-        $match: {
-          $expr: {
-            $gte: ['$seminarsAttendedCount', '$requiredSeminarsPerYear'],
-          },
-        },
-      },
-      { $count: 'count' },
+    const [employees, activeSeminarIdSet] = await Promise.all([
+      Employee.find(activeFilter).select('seminarsAttended requiredSeminarsPerYear').lean(),
+      buildActiveSeminarIdSet(),
     ]);
 
-    const compliant = compliantAgg?.[0]?.count || 0;
+    const compliant = employees.reduce((count, employee) => {
+      const required = Number(employee.requiredSeminarsPerYear || 5);
+      const attended = countActiveAttendedSeminars(employee.seminarsAttended, activeSeminarIdSet);
+      return count + (attended >= required ? 1 : 0);
+    }, 0);
     const nonCompliant = totalEmployees - compliant;
     const completionRate = totalEmployees === 0 ? 0 : (compliant / totalEmployees) * 100;
 
     res.json({
       totalEmployees,
+      deactivatedEmployees,
       compliant,
       nonCompliant,
       completionRatePercent: Number(completionRate.toFixed(1)),
@@ -194,16 +258,31 @@ router.get('/reports/summary', authMiddleware, async (req, res, next) => {
 // Employee table listing
 router.get('/employees', authMiddleware, async (req, res, next) => {
   try {
-    const { department } = req.query;
-    const filter = {};
+    const { department, accountStatus, name } = req.query;
+    const filter = { role: 'employee' };
     if (department && String(department).trim()) {
       filter.department = String(department).trim();
     }
+    const nameFilter = String(name || '').trim();
+    if (nameFilter) {
+      const escaped = nameFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.name = { $regex: escaped, $options: 'i' };
+    }
+    const statusFilter = String(accountStatus || 'active').trim().toLowerCase();
+    if (statusFilter === 'active') {
+      filter.accountStatus = { $ne: 'deactivated' };
+    }
+    if (statusFilter === 'deactivated') {
+      filter.accountStatus = 'deactivated';
+    }
 
-    const employees = await Employee.find(filter).sort({ department: 1, name: 1 }).lean();
+    const [employees, activeSeminarIdSet] = await Promise.all([
+      Employee.find(filter).sort({ department: 1, name: 1 }).lean(),
+      buildActiveSeminarIdSet(),
+    ]);
 
     const rows = employees.map((e) => {
-      const attended = Array.isArray(e.seminarsAttended) ? e.seminarsAttended.length : 0;
+      const attended = countActiveAttendedSeminars(e.seminarsAttended, activeSeminarIdSet);
       const required = Number(e.requiredSeminarsPerYear || 5);
       const isCompliant = attended >= required;
       return {
@@ -217,6 +296,9 @@ router.get('/employees', authMiddleware, async (req, res, next) => {
         requiredSeminarsPerYear: required,
         seminarStatus: isCompliant ? 'Complete' : 'Incomplete',
         completionText: `${attended}/${required}`,
+        accountStatus: e.accountStatus === 'deactivated' ? 'deactivated' : 'active',
+        isActive: e.accountStatus !== 'deactivated',
+        deactivatedAt: e.deactivatedAt || null,
         updatedAt: e.updatedAt,
       };
     });
@@ -229,10 +311,46 @@ router.get('/employees', authMiddleware, async (req, res, next) => {
   }
 });
 
+router.patch('/employees/:id/account-status', authMiddleware, async (req, res, next) => {
+  try {
+    const desiredStatus = String(req.body?.accountStatus || '').trim().toLowerCase();
+    if (!['active', 'deactivated'].includes(desiredStatus)) {
+      return res.status(400).json({ message: 'accountStatus must be either active or deactivated.' });
+    }
+
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found.' });
+    }
+    if (employee.role === 'admin') {
+      return res.status(400).json({ message: 'Admin accounts cannot be deactivated from this view.' });
+    }
+
+    employee.accountStatus = desiredStatus;
+    employee.deactivatedAt = desiredStatus === 'deactivated' ? new Date() : null;
+    await employee.save();
+
+    res.json({
+      message: desiredStatus === 'deactivated' ? 'Employee account deactivated.' : 'Employee account reactivated.',
+      employee: {
+        id: employee._id.toString(),
+        accountStatus: employee.accountStatus,
+        deactivatedAt: employee.deactivatedAt,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/employees/:id/profile', authMiddleware, async (req, res, next) => {
   try {
     const employee = await Employee.findById(req.params.id)
-      .populate('seminarsAttended', 'title date startTime')
+      .populate({
+        path: 'seminarsAttended',
+        select: 'title date startTime',
+        match: { isDeleted: { $ne: true } },
+      })
       .lean();
 
     if (!employee) {
@@ -240,12 +358,19 @@ router.get('/employees/:id/profile', authMiddleware, async (req, res, next) => {
     }
 
     const registrations = await Registration.find({ employeeID: employee._id })
-      .populate('seminarID', 'title date startTime')
+      .populate({
+        path: 'seminarID',
+        select: 'title date startTime',
+        match: { isDeleted: { $ne: true } },
+      })
       .sort({ createdAt: -1 })
       .lean();
 
     const reservedSeminars = registrations
-      .filter((r) => ['registered', 'pre-registered'].includes(String(r?.status || '').toLowerCase()))
+      .filter(
+        (r) =>
+          Boolean(r?.seminarID) && ['registered', 'pre-registered'].includes(String(r?.status || '').toLowerCase())
+      )
       .map((r) => ({
         id: r?.seminarID?._id?.toString() || '',
         title: r?.seminarID?.title || 'Untitled seminar',
@@ -255,7 +380,7 @@ router.get('/employees/:id/profile', authMiddleware, async (req, res, next) => {
       }));
 
     const takenFromRegistrations = registrations
-      .filter((r) => String(r?.status || '').toLowerCase() === 'attended')
+      .filter((r) => Boolean(r?.seminarID) && String(r?.status || '').toLowerCase() === 'attended')
       .map((r) => ({
         id: r?.seminarID?._id?.toString() || '',
         title: r?.seminarID?.title || 'Untitled seminar',
@@ -280,7 +405,7 @@ router.get('/employees/:id/profile', authMiddleware, async (req, res, next) => {
 
     const takenSeminars = [...takenFromRegistrations, ...takenFromEmployeeRecord];
     const certificates = registrations
-      .filter((r) => String(r?.status || '').toLowerCase() === 'attended' && r.certificateIssued)
+      .filter((r) => Boolean(r?.seminarID) && String(r?.status || '').toLowerCase() === 'attended' && r.certificateIssued)
       .map((r) => ({
         registrationId: r._id.toString(),
         seminarId: r.seminarID?._id?.toString() || '',
@@ -304,6 +429,8 @@ router.get('/employees/:id/profile', authMiddleware, async (req, res, next) => {
         email: employee.email || '',
         department: employee.department || '',
         position: employee.position || '',
+        accountStatus: employee.accountStatus === 'deactivated' ? 'deactivated' : 'active',
+        deactivatedAt: employee.deactivatedAt || null,
         seminarStatus: attended >= required ? 'Complete' : 'Incomplete',
         completionText: `${attended}/${required}`,
       },
@@ -324,12 +451,17 @@ router.post('/employees/notify', authMiddleware, async (req, res, next) => {
       return res.status(400).json({ message: 'employeeIds is required.' });
     }
 
-    const employees = await Employee.find({ _id: { $in: employeeIds } });
+    const employees = await Employee.find({
+      _id: { $in: employeeIds },
+      role: 'employee',
+      accountStatus: { $ne: 'deactivated' },
+    });
 
     let sent = 0;
+    const activeSeminarIdSet = await buildActiveSeminarIdSet();
     for (const employee of employees) {
       const required = Number(employee.requiredSeminarsPerYear || 5);
-      const completed = Array.isArray(employee.seminarsAttended) ? employee.seminarsAttended.length : 0;
+      const completed = countActiveAttendedSeminars(employee.seminarsAttended, activeSeminarIdSet);
       const remaining = required - completed;
       if (remaining <= 0) continue;
 
@@ -347,49 +479,54 @@ router.post('/employees/notify', authMiddleware, async (req, res, next) => {
   }
 });
 
+const buildValidatedSessions = (rawSessions, allowPast = false) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sessions = [];
+  for (const s of rawSessions) {
+    if (!s.date || !s.startTime || !s.durationHours) {
+      return { error: 'Each session requires a date, start time, and duration.' };
+    }
+    const d = parseDateOnly(s.date);
+    if (!d) return { error: `Invalid session date: ${s.date}` };
+    d.setHours(0, 0, 0, 0);
+    if (!allowPast && d < today) return { error: 'Session dates cannot be in the past.' };
+    sessions.push({ ...s, date: d, durationHours: Number(s.durationHours) });
+  }
+  sessions.sort((a, b) => new Date(a.date) - new Date(b.date));
+  return { sessions };
+};
+
 router.post('/seminars', authMiddleware, async (req, res, next) => {
   try {
-    const {
-      title,
-      description,
-      date,
-      startTime,
-      durationHours,
-      mandatory,
-      capacity,
-      autoSendCertificates,
-      certificateReleaseMode,
-    } = req.body;
-    if (!title || !description || !date || !startTime || !durationHours || !capacity) {
-      return res
-        .status(400)
-        .json({ message: 'Title, description, date, start time, duration, and capacity are required.' });
+    const { title, description, mandatory, capacity, autoSendCertificates, certificateReleaseMode, multiSessionType } = req.body;
+    if (!title || !description || !capacity) {
+      return res.status(400).json({ message: 'Title, description, and capacity are required.' });
     }
 
-    const seminarDate = parseDateOnly(date);
-    if (!seminarDate) {
-      return res.status(400).json({ message: 'Invalid seminar date.' });
-    }
+    const rawSessions =
+      Array.isArray(req.body.sessions) && req.body.sessions.length > 0
+        ? req.body.sessions
+        : [{ date: req.body.date, startTime: req.body.startTime, durationHours: req.body.durationHours }];
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    seminarDate.setHours(0, 0, 0, 0);
-    if (seminarDate < today) {
-      return res.status(400).json({ message: 'Seminar date cannot be in the past.' });
-    }
+    const { sessions, error } = buildValidatedSessions(rawSessions);
+    if (error) return res.status(400).json({ message: error });
 
     const releaseMode = normalizeCertificateReleaseMode({ certificateReleaseMode, autoSendCertificates });
+    const resolvedSessionType = sessions.length > 1 && multiSessionType === 'pick-one' ? 'pick-one' : 'all';
 
     const seminar = await Seminar.create({
-      title,
-      description,
-      date,
-      startTime,
-      durationHours: Number(durationHours),
+      title: String(title).trim(),
+      description: String(description).trim(),
+      date: sessions[0].date,
+      startTime: sessions[0].startTime,
+      durationHours: sessions[0].durationHours,
+      sessions,
       mandatory: String(mandatory).toLowerCase() === 'true',
       capacity: Number(capacity),
       autoSendCertificates: releaseMode === 'automatic',
       certificateReleaseMode: releaseMode,
+      multiSessionType: resolvedSessionType,
       createdBy: req.user.id,
     });
 
@@ -401,8 +538,232 @@ router.post('/seminars', authMiddleware, async (req, res, next) => {
 
 router.get('/seminars', authMiddleware, async (req, res, next) => {
   try {
-    const seminars = await Seminar.find().sort({ date: -1, startTime: -1 });
+    await purgeExpiredDeletedSeminars();
+    const seminars = await Seminar.find({ isDeleted: { $ne: true } }).sort({ date: -1, startTime: -1 });
+    const result = seminars.map((s) => {
+      const obj = s.toObject();
+      obj.hasPendingFinalization =
+        Array.isArray(s.sessions) &&
+        s.sessions.length > 0 &&
+        s.sessions.every((sess) => sess.isHeld) &&
+        !s.isHeld;
+      return obj;
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/seminars/deleted', authMiddleware, async (req, res, next) => {
+  try {
+    await purgeExpiredDeletedSeminars();
+    const now = new Date();
+    const seminars = await Seminar.find({
+      isDeleted: true,
+      deletePermanentlyAt: { $gt: now },
+    })
+      .sort({ deletedAt: -1, date: -1, startTime: -1 })
+      .lean();
     res.json(seminars);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/seminars/:id/restore', authMiddleware, async (req, res, next) => {
+  try {
+    const seminar = await Seminar.findOne({ _id: req.params.id, isDeleted: true });
+    if (!seminar) return res.status(404).json({ message: 'Deleted seminar not found.' });
+
+    seminar.isDeleted = false;
+    seminar.deletedAt = null;
+    seminar.deletePermanentlyAt = null;
+    await seminar.save();
+
+    const attendedEmployeeIds = await Registration.distinct('employeeID', {
+      seminarID: seminar._id,
+      status: 'attended',
+    });
+    if (attendedEmployeeIds.length > 0) {
+      await Employee.updateMany(
+        { _id: { $in: attendedEmployeeIds } },
+        { $addToSet: { seminarsAttended: seminar._id } }
+      );
+    }
+
+    res.json({ message: 'Seminar restored successfully.', seminar });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/seminars/:id/permanent', authMiddleware, async (req, res, next) => {
+  try {
+    const seminar = await Seminar.findOne({ _id: req.params.id, isDeleted: true });
+    if (!seminar) return res.status(404).json({ message: 'Deleted seminar not found.' });
+
+    await permanentlyDeleteSeminarsByIds([seminar._id]);
+
+    res.json({ message: 'Seminar permanently deleted.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Mark a single session as held
+router.post('/seminars/:id/sessions/:sessionId/held', authMiddleware, async (req, res, next) => {
+  try {
+    const seminar = await findActiveSeminarById(req.params.id);
+    if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
+
+    const session = seminar.sessions.id(req.params.sessionId);
+    if (!session) return res.status(404).json({ message: 'Session not found' });
+
+    if (!session.isHeld) {
+      session.isHeld = true;
+      session.heldAt = new Date();
+    }
+    if (!seminar.isHeld) {
+      seminar.isHeld = true;
+      seminar.heldAt = new Date();
+    }
+    await seminar.save();
+    res.json({ message: 'Session marked as held.', session });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Record attendance for a single session
+router.post('/seminars/:id/sessions/:sessionId/attendance', authMiddleware, async (req, res, next) => {
+  try {
+    const seminar = await findActiveSeminarById(req.params.id);
+    if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
+
+    const session = seminar.sessions.id(req.params.sessionId);
+    if (!session) return res.status(404).json({ message: 'Session not found' });
+    if (!session.isHeld) return res.status(400).json({ message: 'Mark this session as held before recording attendance.' });
+
+    const attendedIds = Array.isArray(req.body?.attendedRegistrationIds)
+      ? req.body.attendedRegistrationIds.map(String)
+      : [];
+
+    const registrations = await Registration.find({
+      seminarID: seminar._id,
+      status: { $in: ['registered', 'attended', 'absent'] },
+    });
+
+    for (const reg of registrations) {
+      const attended = attendedIds.includes(String(reg._id));
+      if (!Array.isArray(reg.sessionAttendance)) reg.sessionAttendance = [];
+      const idx = reg.sessionAttendance.findIndex((sa) => String(sa.sessionId) === String(session._id));
+      if (idx >= 0) {
+        reg.sessionAttendance[idx].attended = attended;
+        reg.sessionAttendance[idx].markedAt = new Date();
+      } else {
+        reg.sessionAttendance.push({ sessionId: session._id, attended, markedAt: new Date() });
+      }
+      reg.markModified('sessionAttendance');
+      await reg.save();
+    }
+
+    res.json({ message: `Session attendance saved for ${registrations.length} participant(s).` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Finalize overall attendance based on all held sessions
+router.post('/seminars/:id/attendance/finalize', authMiddleware, async (req, res, next) => {
+  try {
+    const seminar = await findActiveSeminarById(req.params.id);
+    if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
+
+    const heldSessions = (seminar.sessions || []).filter((s) => s.isHeld);
+    if (!heldSessions.length) {
+      return res.status(400).json({ message: 'Mark at least one session as held before finalizing.' });
+    }
+
+    const registrations = await Registration.find({
+      seminarID: seminar._id,
+      status: { $in: ['registered', 'attended', 'absent'] },
+    });
+
+    if (!registrations.length) {
+      return res.json({ message: 'No approved participants found.', attendedCount: 0, absentCount: 0 });
+    }
+
+    let attendedCount = 0;
+    let absentCount = 0;
+    const attendedEmployeeIds = [];
+    const absentEmployeeIds = [];
+
+    const requiredToPass = seminar.requiredSessionsToPass
+      ? Math.min(seminar.requiredSessionsToPass, heldSessions.length)
+      : heldSessions.length;
+
+    for (const reg of registrations) {
+      let passed = false;
+      if (seminar.multiSessionType === 'pick-one' && reg.chosenSessionId) {
+        // Only check the one session the employee chose
+        const chosenHeld = heldSessions.find((s) => String(s._id) === String(reg.chosenSessionId));
+        if (chosenHeld) {
+          const entry = (reg.sessionAttendance || []).find((sa) => String(sa.sessionId) === String(chosenHeld._id));
+          passed = entry?.attended === true;
+        }
+      } else {
+        const sessionsAttended = heldSessions.filter((session) => {
+          const entry = (reg.sessionAttendance || []).find((sa) => String(sa.sessionId) === String(session._id));
+          return entry?.attended === true;
+        }).length;
+        passed = sessionsAttended >= requiredToPass;
+      }
+      reg.status = passed ? 'attended' : 'absent';
+      if (passed) {
+        reg.evaluationAvailable = true;
+        attendedEmployeeIds.push(reg.employeeID);
+        attendedCount++;
+      } else {
+        reg.evaluationAvailable = false;
+        reg.certificateIssued = false;
+        absentEmployeeIds.push(reg.employeeID);
+        absentCount++;
+      }
+      await reg.save();
+    }
+
+    if (attendedEmployeeIds.length) {
+      await Employee.updateMany(
+        { _id: { $in: attendedEmployeeIds } },
+        { $addToSet: { seminarsAttended: seminar._id } }
+      );
+    }
+    if (absentEmployeeIds.length) {
+      await Employee.updateMany(
+        { _id: { $in: absentEmployeeIds } },
+        { $pull: { seminarsAttended: seminar._id } }
+      );
+    }
+
+    const attendedRegs = registrations.filter((r) => r.status === 'attended');
+    for (const reg of attendedRegs) {
+      await Notification.create({
+        employeeID: reg.employeeID,
+        type: 'evaluation',
+        message: `An evaluation form is now available for the seminar: "${seminar.title}". Please share your feedback.`,
+        seminarID: seminar._id,
+        registrationID: reg._id,
+      });
+    }
+
+    if (seminar.certificateReleaseMode === 'automatic' && attendedRegs.length > 0) {
+      for (const reg of attendedRegs) {
+        await issueCertificateForRegistration({ registration: reg, seminar, employee: { _id: reg.employeeID }, Notification });
+      }
+    }
+
+    res.json({ message: 'Attendance finalized successfully.', attendedCount, absentCount });
   } catch (err) {
     next(err);
   }
@@ -410,8 +771,8 @@ router.get('/seminars', authMiddleware, async (req, res, next) => {
 
 router.get('/seminars/:id/participants', authMiddleware, async (req, res, next) => {
   try {
-    const seminar = await Seminar.findById(req.params.id)
-      .select('title isHeld heldAt registeredEmployees autoSendCertificates certificateReleaseMode')
+    const seminar = await Seminar.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+      .select('title isHeld heldAt sessions registeredEmployees autoSendCertificates certificateReleaseMode')
       .populate('registeredEmployees', 'name department position email');
     if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
 
@@ -438,6 +799,7 @@ router.get('/seminars/:id/participants', authMiddleware, async (req, res, next) 
           : r.evaluationAvailable
             ? 'Not Answered'
             : 'Not Available',
+        sessionAttendance: Array.isArray(r.sessionAttendance) ? r.sessionAttendance : [],
       });
     });
 
@@ -468,6 +830,7 @@ router.get('/seminars/:id/participants', authMiddleware, async (req, res, next) 
         title: seminar.title,
         isHeld: Boolean(seminar.isHeld),
         heldAt: seminar.heldAt,
+        sessions: Array.isArray(seminar.sessions) ? seminar.sessions : [],
         registeredCount: rows.length,
         autoSendCertificates: Boolean(seminar.autoSendCertificates),
         certificateReleaseMode: seminar.certificateReleaseMode || (seminar.autoSendCertificates ? 'automatic' : 'evaluation'),
@@ -482,7 +845,7 @@ router.get('/seminars/:id/participants', authMiddleware, async (req, res, next) 
 // Approve selected pre-registered participants
 router.post('/seminars/:id/approve', authMiddleware, async (req, res, next) => {
   try {
-    const seminar = await Seminar.findById(req.params.id);
+    const seminar = await findActiveSeminarById(req.params.id);
     if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
 
     const registrationIds = Array.isArray(req.body?.registrationIds)
@@ -523,7 +886,7 @@ router.post('/seminars/:id/approve', authMiddleware, async (req, res, next) => {
 
 router.post('/seminars/:id/held', authMiddleware, async (req, res, next) => {
   try {
-    const seminar = await Seminar.findById(req.params.id);
+    const seminar = await findActiveSeminarById(req.params.id);
     if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
     if (!seminar.isHeld) {
       seminar.isHeld = true;
@@ -541,7 +904,7 @@ router.post('/seminars/:id/held', authMiddleware, async (req, res, next) => {
 
 router.post('/seminars/:id/attendance', authMiddleware, async (req, res, next) => {
   try {
-    const seminar = await Seminar.findById(req.params.id);
+    const seminar = await findActiveSeminarById(req.params.id);
     if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
     if (!seminar.isHeld) {
       return res.status(400).json({ message: 'Mark the seminar as held before recording attendance.' });
@@ -630,7 +993,7 @@ router.post('/seminars/:id/attendance', authMiddleware, async (req, res, next) =
 
 router.post('/seminars/:id/certificates', authMiddleware, async (req, res, next) => {
   try {
-    const seminar = await Seminar.findById(req.params.id);
+    const seminar = await findActiveSeminarById(req.params.id);
     if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
 
     const registrationIds = Array.isArray(req.body?.registrationIds)
@@ -675,7 +1038,11 @@ router.get('/employees/:employeeId/certificates/:registrationId/download', authM
       employeeID: req.params.employeeId,
       status: 'attended',
       certificateIssued: true,
-    }).populate('seminarID', 'title date startTime durationHours');
+    }).populate({
+      path: 'seminarID',
+      select: 'title date startTime durationHours',
+      match: { isDeleted: { $ne: true } },
+    });
 
     if (!registration || !registration.seminarID) {
       return res.status(404).json({ message: 'Certificate not found.' });
@@ -691,7 +1058,7 @@ router.get('/employees/:employeeId/certificates/:registrationId/download', authM
     res.setHeader('Content-Type', 'image/png');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="GADIMS-Certificate-${download.fileNameSafe}-${download.certificateCode}.png"`
+      `attachment; filename="GIMS-Certificate-${download.fileNameSafe}-${download.certificateCode}.png"`
     );
     res.send(pngBuffer);
   } catch (err) {
@@ -701,48 +1068,59 @@ router.get('/employees/:employeeId/certificates/:registrationId/download', authM
 
 router.put('/seminars/:id', authMiddleware, async (req, res, next) => {
   try {
-    const {
-      title,
-      description,
-      date,
-      startTime,
-      durationHours,
-      mandatory,
-      capacity,
-      autoSendCertificates,
-      certificateReleaseMode,
-    } = req.body;
-    if (!title || !description || !date || !startTime || !durationHours || !capacity) {
-      return res
-        .status(400)
-        .json({ message: 'Title, description, date, start time, duration, and capacity are required.' });
+    const { title, description, mandatory, capacity, autoSendCertificates, certificateReleaseMode, multiSessionType } = req.body;
+    if (!title || !description || !capacity) {
+      return res.status(400).json({ message: 'Title, description, and capacity are required.' });
     }
 
-    const seminarDate = parseDateOnly(date);
-    if (!seminarDate) {
-      return res.status(400).json({ message: 'Invalid seminar date.' });
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    seminarDate.setHours(0, 0, 0, 0);
-    if (seminarDate < today) {
-      return res.status(400).json({ message: 'Seminar date cannot be in the past.' });
-    }
-
-    const seminar = await Seminar.findById(req.params.id);
+    const seminar = await findActiveSeminarById(req.params.id);
     if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
+
+    const rawSessions =
+      Array.isArray(req.body.sessions) && req.body.sessions.length > 0
+        ? req.body.sessions
+        : [{ date: req.body.date, startTime: req.body.startTime, durationHours: req.body.durationHours }];
+
+    // Build existing session map to preserve isHeld/heldAt
+    const existingMap = new Map((seminar.sessions || []).map((s) => [String(s._id), s]));
+
+    const newSessions = [];
+    for (const s of rawSessions) {
+      const existing = s._id ? existingMap.get(String(s._id)) : null;
+      if (existing?.isHeld) {
+        // Keep held session exactly as-is
+        newSessions.push(existing.toObject());
+        continue;
+      }
+      if (!s.date || !s.startTime || !s.durationHours) {
+        return res.status(400).json({ message: 'Each session requires a date, start time, and duration.' });
+      }
+      const d = parseDateOnly(s.date);
+      if (!d) return res.status(400).json({ message: `Invalid session date: ${s.date}` });
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      d.setHours(0, 0, 0, 0);
+      if (d < today) return res.status(400).json({ message: 'Session dates cannot be in the past.' });
+      if (existing) {
+        newSessions.push({ ...existing.toObject(), date: d, startTime: s.startTime, durationHours: Number(s.durationHours) });
+      } else {
+        newSessions.push({ date: d, startTime: s.startTime, durationHours: Number(s.durationHours) });
+      }
+    }
+    newSessions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     seminar.title = String(title).trim();
     seminar.description = String(description).trim();
-    seminar.date = date;
-    seminar.startTime = String(startTime).trim();
-    seminar.durationHours = Number(durationHours);
+    seminar.sessions = newSessions;
+    seminar.date = newSessions[0]?.date || seminar.date;
+    seminar.startTime = newSessions[0]?.startTime || seminar.startTime;
+    seminar.durationHours = newSessions[0]?.durationHours || seminar.durationHours;
     seminar.mandatory = String(mandatory).toLowerCase() === 'true';
     seminar.capacity = Number(capacity);
     const releaseMode = normalizeCertificateReleaseMode({ certificateReleaseMode, autoSendCertificates });
     seminar.certificateReleaseMode = releaseMode;
     seminar.autoSendCertificates = releaseMode === 'automatic';
+    seminar.multiSessionType = newSessions.length > 1 && multiSessionType === 'pick-one' ? 'pick-one' : 'all';
 
     await seminar.save();
     res.json(seminar);
@@ -789,8 +1167,8 @@ router.delete(
 
 router.post('/seminars/:id/close', authMiddleware, async (req, res, next) => {
   try {
-    const seminar = await Seminar.findByIdAndUpdate(
-      req.params.id,
+    const seminar = await Seminar.findOneAndUpdate(
+      { _id: req.params.id, isDeleted: { $ne: true } },
       { $set: { capacity: 0 } },
       { new: true }
     );
@@ -803,11 +1181,87 @@ router.post('/seminars/:id/close', authMiddleware, async (req, res, next) => {
 
 router.delete('/seminars/:id', authMiddleware, async (req, res, next) => {
   try {
-    await Registration.deleteMany({ seminarID: req.params.id });
-    await Notification.deleteMany({ seminarID: req.params.id });
-    const seminar = await Seminar.findByIdAndDelete(req.params.id);
+    const seminar = await findActiveSeminarById(req.params.id);
     if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
-    res.json({ message: 'Seminar deleted' });
+
+    const now = new Date();
+    seminar.isDeleted = true;
+    seminar.deletedAt = now;
+    seminar.deletePermanentlyAt = new Date(now.getTime() + SEMINAR_DELETE_RETENTION_MS);
+    await seminar.save();
+
+    await Employee.updateMany(
+      { seminarsAttended: seminar._id },
+      { $pull: { seminarsAttended: seminar._id } }
+    );
+
+    res.json({
+      message: 'Seminar moved to Recently Deleted. It will be permanently deleted in 7 days.',
+      deletePermanentlyAt: seminar.deletePermanentlyAt,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Upload a material (PDF/PPT) to a specific seminar
+router.post('/seminars/:id/materials', authMiddleware, materialsUpload.single('file'), async (req, res, next) => {
+  try {
+    const seminar = await findActiveSeminarById(req.params.id);
+    if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
+
+    const { title, description } = req.body;
+    if (!title || !req.file) {
+      return res.status(400).json({ message: 'Title and file are required.' });
+    }
+
+    const material = await LearningMaterial.create({
+      title: String(title).trim(),
+      description: String(description || '').trim(),
+      fileURL: `/uploads/${req.file.filename}`,
+      uploadedBy: req.user.id,
+    });
+
+    seminar.materials.push(material._id);
+    await seminar.save();
+
+    res.status(201).json(material);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get all materials for a specific seminar (admin)
+router.get('/seminars/:id/materials', authMiddleware, async (req, res, next) => {
+  try {
+    const seminar = await Seminar.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+      .populate('materials')
+      .select('materials');
+    if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
+    res.json(Array.isArray(seminar.materials) ? seminar.materials : []);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Remove a material from a seminar
+router.delete('/seminars/:id/materials/:materialId', authMiddleware, async (req, res, next) => {
+  try {
+    const seminar = await findActiveSeminarById(req.params.id);
+    if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
+
+    seminar.materials = seminar.materials.filter(
+      (m) => String(m) !== String(req.params.materialId)
+    );
+    await seminar.save();
+
+    const material = await LearningMaterial.findByIdAndDelete(req.params.materialId);
+    if (material?.fileURL) {
+      const filePath = path.join(process.cwd(), 'public', material.fileURL);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
+    res.json({ message: 'Material removed successfully.' });
   } catch (err) {
     next(err);
   }
@@ -844,12 +1298,15 @@ router.get('/materials', authMiddleware, async (req, res, next) => {
 
 router.get('/reports/employees.csv', authMiddleware, async (req, res, next) => {
   try {
-    const employees = await Employee.find().lean();
+    const [employees, activeSeminarIdSet] = await Promise.all([
+      Employee.find().lean(),
+      buildActiveSeminarIdSet(),
+    ]);
 
     const header = 'Name,Department,Position,Seminars Attended\n';
     const rows = employees
       .map((e) => {
-        const attended = Array.isArray(e.seminarsAttended) ? e.seminarsAttended.length : 0;
+        const attended = countActiveAttendedSeminars(e.seminarsAttended, activeSeminarIdSet);
         return `"${(e.name || '').replace(/"/g, '""')}","${(e.department || '').replace(
           /"/g,
           '""'
@@ -859,7 +1316,7 @@ router.get('/reports/employees.csv', authMiddleware, async (req, res, next) => {
 
     const csv = header + rows;
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="gadims_employees.csv"');
+    res.setHeader('Content-Disposition', 'attachment; filename="gims_employees.csv"');
     res.send(csv);
   } catch (err) {
     next(err);
@@ -870,6 +1327,59 @@ router.post('/notifications/reminders', authMiddleware, async (req, res, next) =
   try {
     const result = await sendBulkReminders();
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Seminar-specific report: attendance counts + attendee demographic breakdown
+router.get('/seminars/:id/report', authMiddleware, async (req, res, next) => {
+  try {
+    const seminar = await Seminar.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+      .select('title date startTime isHeld sessions');
+    if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
+
+    const registrations = await Registration.find({ seminarID: seminar._id })
+      .populate('employeeID', 'birthSex genderIdentity name department')
+      .lean();
+
+    const counts = { preRegistered: 0, registered: 0, attended: 0, absent: 0 };
+    const demographics = { male: 0, female: 0, other: 0 };
+
+    for (const reg of registrations) {
+      const status = String(reg.status || '').toLowerCase();
+      if (status === 'pre-registered') counts.preRegistered += 1;
+      else if (status === 'registered') counts.registered += 1;
+      else if (status === 'attended') {
+        counts.attended += 1;
+        const sex = String(reg.employeeID?.birthSex || '').toLowerCase();
+        if (sex.includes('male') && !sex.includes('female')) demographics.male += 1;
+        else if (sex.includes('female')) demographics.female += 1;
+        else demographics.other += 1;
+      } else if (status === 'absent') counts.absent += 1;
+    }
+
+    const totalTracked = registrations.length;
+
+    const sessionDates = Array.isArray(seminar.sessions) && seminar.sessions.length > 0
+      ? seminar.sessions.map((s) => s.date).filter(Boolean).sort((a, b) => new Date(a) - new Date(b))
+      : [];
+
+    const seminarDateDisplay = sessionDates.length > 1
+      ? `${new Date(sessionDates[0]).toLocaleDateString()} – ${new Date(sessionDates[sessionDates.length - 1]).toLocaleDateString()}`
+      : new Date(seminar.date).toLocaleDateString();
+
+    res.json({
+      seminarTitle: seminar.title,
+      seminarDate: seminar.date,
+      seminarDateDisplay,
+      seminarStartTime: seminar.startTime,
+      isHeld: Boolean(seminar.isHeld),
+      sessionCount: sessionDates.length || 1,
+      totalTracked,
+      counts,
+      demographics,
+    });
   } catch (err) {
     next(err);
   }
@@ -931,5 +1441,6 @@ router.delete('/articles/:id', authMiddleware, async (req, res, next) => {
     next(err);
   }
 });
+
 
 export default router;

@@ -32,7 +32,7 @@ export const buildCertificateHtml = ({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GADIMS Certificate - ${escapeHtml(employeeName)}</title>
+    <title>GIMS Certificate - ${escapeHtml(employeeName)}</title>
     <style>
       :root { color-scheme: light; }
       body {
@@ -154,7 +154,7 @@ export const buildCertificateHtml = ({
   </head>
   <body>
     <article class="certificate">
-      <div class="watermark">GADIMS</div>
+      <div class="watermark">GIMS</div>
       <header class="header">
         <div class="org">XAVIER UNIVERSITY - ATENEO DE CAGAYAN</div>
         <div class="title">Certificate of Attendance</div>
@@ -180,7 +180,7 @@ export const buildCertificateHtml = ({
 
       <footer class="footer">
         <div class="sig">GAD Office Representative</div>
-        <div class="badge">System-Issued via GADIMS</div>
+        <div class="badge">System-Issued via GIMS</div>
       </footer>
     </article>
   </body>

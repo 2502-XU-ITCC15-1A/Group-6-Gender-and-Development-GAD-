@@ -11,6 +11,15 @@ const SeminarSchema = new mongoose.Schema(
     capacity: { type: Number, required: true, min: 1 },
     isHeld: { type: Boolean, default: false },
     heldAt: { type: Date },
+    sessions: [
+      {
+        date: { type: Date, required: true },
+        startTime: { type: String, required: true },
+        durationHours: { type: Number, required: true, min: 0.5 },
+        isHeld: { type: Boolean, default: false },
+        heldAt: { type: Date },
+      },
+    ],
     registeredEmployees: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -36,6 +45,19 @@ const SeminarSchema = new mongoose.Schema(
       enum: ['manual', 'evaluation', 'automatic'],
       default: 'evaluation',
     },
+    requiredSessionsToPass: {
+      type: Number,
+      default: null,
+      min: 1,
+    },
+    multiSessionType: {
+      type: String,
+      enum: ['all', 'pick-one'],
+      default: 'all',
+    },
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null },
+    deletePermanentlyAt: { type: Date, default: null, index: true },
   },
   { timestamps: { createdAt: true, updatedAt: true } }
 );

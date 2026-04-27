@@ -73,6 +73,11 @@ router.post('/forgot-password/request', async (req, res, next) => {
       return res.status(404).json({ message: 'No employee account was found for this email.' });
     }
 
+    const employee = await Employee.findById(user.employee).select('accountStatus');
+    if (employee?.accountStatus === 'deactivated') {
+      return res.status(403).json({ message: 'This account is deactivated. Please contact the GAD office.' });
+    }
+
     const code = generatePin();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
@@ -122,7 +127,7 @@ router.post('/forgot-password/verify', async (req, res, next) => {
         email: email.toLowerCase().trim(),
         scope: 'password-reset',
       },
-      process.env.JWT_SECRET || 'gadims-secret',
+      process.env.JWT_SECRET || 'gims-secret',
       { expiresIn: '10m' }
     );
 
@@ -142,7 +147,7 @@ router.post('/forgot-password/confirm', async (req, res, next) => {
 
     let payload;
     try {
-      payload = jwt.verify(token, process.env.JWT_SECRET || 'gadims-secret');
+      payload = jwt.verify(token, process.env.JWT_SECRET || 'gims-secret');
     } catch {
       return res.status(401).json({ message: 'Invalid or expired reset token.' });
     }
@@ -202,7 +207,7 @@ router.post('/verify-pin', async (req, res, next) => {
         email: email.toLowerCase().trim(),
         scope: 'registration',
       },
-      process.env.JWT_SECRET || 'gadims-secret',
+      process.env.JWT_SECRET || 'gims-secret',
       { expiresIn: '10m' }
     );
 
@@ -222,7 +227,7 @@ router.post('/create-account', async (req, res, next) => {
 
     let payload;
     try {
-      payload = jwt.verify(token, process.env.JWT_SECRET || 'gadims-secret');
+      payload = jwt.verify(token, process.env.JWT_SECRET || 'gims-secret');
     } catch {
       return res.status(401).json({ message: 'Invalid or expired registration token.' });
     }
@@ -265,7 +270,7 @@ router.post('/create-account', async (req, res, next) => {
 
     const sessionToken = jwt.sign(
       { id: employee._id, role: employee.role, email: employee.email },
-      process.env.JWT_SECRET || 'gadims-secret',
+      process.env.JWT_SECRET || 'gims-secret',
       { expiresIn: '8h' }
     );
 
@@ -298,12 +303,15 @@ router.post('/login', async (req, res, next) => {
     if (role === 'employee' && !employeeDoc) {
       return res.status(401).json({ message: 'Employee profile not found.' });
     }
+    if (role === 'employee' && employeeDoc?.accountStatus === 'deactivated') {
+      return res.status(403).json({ message: 'Your account is deactivated. Please contact the GAD office.' });
+    }
 
     const id = employeeDoc?._id || user._id;
 
     const token = jwt.sign(
       { id, role, email: email.toLowerCase().trim() },
-      process.env.JWT_SECRET || 'gadims-secret',
+      process.env.JWT_SECRET || 'gims-secret',
       { expiresIn: '8h' }
     );
 
