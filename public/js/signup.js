@@ -24,7 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const pinStatusEl = document.getElementById('signup-pin-status');
   const completeStatusEl = document.getElementById('signup-complete-status');
 
-  const fullNameInput = document.getElementById('signup-full-name');
+  const firstNameInput = document.getElementById('signup-first-name');
+  const lastNameInput = document.getElementById('signup-last-name');
   const departmentInput = document.getElementById('signup-department');
   const positionInput = document.getElementById('signup-position');
   const passwordInput = document.getElementById('signup-password');
@@ -39,7 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let verifiedEmail = null;
 
   const profileInputs = [
-    fullNameInput,
+    firstNameInput,
+    lastNameInput,
     departmentInput,
     positionInput,
     passwordInput,
@@ -150,7 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const payload = {
-      fullName: /** @type {HTMLInputElement} */ (fullNameInput).value.trim(),
+      firstName: /** @type {HTMLInputElement} */ (firstNameInput).value.trim(),
+      lastName: /** @type {HTMLInputElement} */ (lastNameInput).value.trim(),
       department: /** @type {HTMLInputElement} */ (departmentInput).value.trim(),
       position: /** @type {HTMLInputElement} */ (positionInput).value.trim(),
       password: /** @type {HTMLInputElement} */ (passwordInput).value.trim(),
@@ -160,9 +163,9 @@ document.addEventListener('DOMContentLoaded', () => {
         : '',
     };
 
-    if (!payload.fullName || !payload.department || !payload.position || !payload.birthSex || !payload.password) {
+    if (!payload.firstName || !payload.lastName || !payload.department || !payload.position || !payload.birthSex || !payload.password) {
       completeStatusEl.textContent =
-        'Full Name, Department, Position, Birth Sex, and Password are required.';
+        'First Name, Last Name, Department, Position, Birth Sex, and Password are required.';
       return;
     }
 
@@ -208,7 +211,8 @@ document.addEventListener('DOMContentLoaded', () => {
       /** @type {HTMLInputElement} */ (pinInput).value = '';
       /** @type {HTMLInputElement} */ (pinInput).disabled = true;
     }
-    if (fullNameInput) /** @type {HTMLInputElement} */ (fullNameInput).value = '';
+    if (firstNameInput) /** @type {HTMLInputElement} */ (firstNameInput).value = '';
+    if (lastNameInput) /** @type {HTMLInputElement} */ (lastNameInput).value = '';
     if (departmentInput) /** @type {HTMLInputElement} */ (departmentInput).value = '';
     if (positionInput) /** @type {HTMLInputElement} */ (positionInput).value = '';
     if (passwordInput) /** @type {HTMLInputElement} */ (passwordInput).value = '';
