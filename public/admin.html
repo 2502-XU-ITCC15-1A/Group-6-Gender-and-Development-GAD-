@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <title>GIMS Admin Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap"></noscript>
     <link rel="stylesheet" href="/css/styles.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -87,26 +91,22 @@
         <div class="brand">
           <div class="brand-badge">XU</div>
           <div class="brand-title">
-            <div class="wordmark" aria-label="Xavier University Ateneo deCagayan">
+            <div class="wordmark" aria-label="Xavier University Ateneo de Cagayan">
               <div class="wordmark-xu">XAVIER UNIVERSITY</div>
               <div class="wordmark-ateneo">Ateneo de Cagayan</div>
             </div>
-            <strong>GIMS</strong>
           </div>
         </div>
         <div class="topbar-actions">
-          <div class="topbar-user" aria-live="polite">
-            <div class="topbar-user-name" id="admin-topbar-name">—</div>
-            <div class="topbar-user-meta" id="admin-topbar-email">—</div>
-            <div class="topbar-user-meta" id="admin-topbar-id">—</div>
-          </div>
-          <span class="theme-emoji" role="button" tabindex="0" data-theme-toggle aria-label="Toggle theme">☾</span>
+          <button class="topbar-profile-trigger" id="admin-profile-trigger" type="button" title="View Profile">
+            <i class="fa-solid fa-circle-user"></i>
+          </button>
           <button class="btn secondary" id="admin-logout-btn" type="button">Logout</button>
         </div>
       </div>
     </header>
 
-    <section class="hero">
+    <section class="hero hero-magis">
       <div class="hero-inner">
         <h1>GIMS Admin Dashboard</h1>
         <p class="muted">Monitor seminar compliance, manage participants, and export reports.</p>
@@ -659,8 +659,37 @@
       </div>
     </div>
 
+    <!-- Admin Self-Profile Modal -->
+    <div class="modal-backdrop" id="admin-own-profile-modal" role="dialog" aria-modal="true" aria-labelledby="admin-own-profile-title" style="display:none;">
+      <div class="modal" style="width: min(480px, 100%);">
+        <div class="modal-header">
+          <h3 id="admin-own-profile-title">Admin Profile</h3>
+          <button class="btn secondary" id="admin-own-profile-close" type="button">Close</button>
+        </div>
+        <div class="modal-content">
+          <div style="display:grid; gap:0.9rem;">
+            <div>
+              <div class="muted small" style="font-size:0.82rem;">Name</div>
+              <div style="font-weight:600; margin-top:0.25rem;" id="admin-own-profile-name">—</div>
+            </div>
+            <div>
+              <div class="muted small" style="font-size:0.82rem;">Email</div>
+              <div style="margin-top:0.25rem;" id="admin-own-profile-email">—</div>
+            </div>
+            <div>
+              <div class="muted small" style="font-size:0.82rem;">Role</div>
+              <div style="margin-top:0.25rem; font-weight:600; color:var(--xu-blue);">Administrator</div>
+            </div>
+            <div>
+              <div class="muted small" style="font-size:0.82rem;">Admin ID</div>
+              <div style="margin-top:0.25rem;" id="admin-own-profile-id">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="/js/theme.js"></script>
     <script src="/js/admin.js"></script>
   </body>
 </html>

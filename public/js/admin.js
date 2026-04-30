@@ -90,9 +90,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const employeesTableEl = document.getElementById('admin-employees-table');
   const deletedSeminarsListEl = document.getElementById('admin-deleted-seminars-list');
   const deletedSeminarsStatusEl = document.getElementById('admin-deleted-seminars-status');
-  const topbarNameEl = document.getElementById('admin-topbar-name');
-  const topbarEmailEl = document.getElementById('admin-topbar-email');
-  const topbarIdEl = document.getElementById('admin-topbar-id');
+  const adminProfileTriggerBtn = document.getElementById('admin-profile-trigger');
+  const adminOwnProfileModalEl = document.getElementById('admin-own-profile-modal');
+  const adminOwnProfileCloseBtn = document.getElementById('admin-own-profile-close');
+  const adminOwnProfileNameEl = document.getElementById('admin-own-profile-name');
+  const adminOwnProfileEmailEl = document.getElementById('admin-own-profile-email');
+  const adminOwnProfileIdEl = document.getElementById('admin-own-profile-id');
 
   // Pre-registration elements
   const preRegListEl = document.getElementById('admin-pre-reg-list');
@@ -1057,19 +1060,30 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const setTopbarFromToken = () => {
-    if (topbarEmailEl) topbarEmailEl.textContent = payload.email || 'admin@xu.edu.ph';
-    if (topbarIdEl) topbarIdEl.textContent = payload.id ? `ID: ${payload.id}` : 'ID: —';
-    if (topbarNameEl) {
-      const email = String(payload.email || '');
-      const first = email.split('@')[0] || '';
-      const pretty = first
-        .split(/[._-]/g)
-        .filter(Boolean)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(' ');
-      topbarNameEl.textContent = pretty || 'Admin';
-    }
+    const email = String(payload.email || '');
+    const first = email.split('@')[0] || '';
+    const prettyName = first
+      .split(/[._-]/g)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ') || 'Admin';
+
+    if (adminOwnProfileNameEl) adminOwnProfileNameEl.textContent = prettyName;
+    if (adminOwnProfileEmailEl) adminOwnProfileEmailEl.textContent = email || '—';
+    if (adminOwnProfileIdEl) adminOwnProfileIdEl.textContent = payload.id || '—';
   };
+
+  adminProfileTriggerBtn?.addEventListener('click', () => {
+    if (adminOwnProfileModalEl) adminOwnProfileModalEl.style.display = 'flex';
+  });
+
+  adminOwnProfileCloseBtn?.addEventListener('click', () => {
+    if (adminOwnProfileModalEl) adminOwnProfileModalEl.style.display = 'none';
+  });
+
+  adminOwnProfileModalEl?.addEventListener('click', (e) => {
+    if (e.target === adminOwnProfileModalEl) adminOwnProfileModalEl.style.display = 'none';
+  });
 
   const closeSeminarEditModal = () => {
     if (seminarEditModalEl) seminarEditModalEl.style.display = 'none';

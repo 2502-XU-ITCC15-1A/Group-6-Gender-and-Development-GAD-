@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <title>Create GIMS Account</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap"></noscript>
     <link rel="stylesheet" href="/css/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   </head>
@@ -17,7 +21,6 @@
           </div>
         </a>
         <div class="topbar-actions">
-          <span class="theme-emoji" role="button" tabindex="0" data-theme-toggle aria-label="Toggle theme">☾</span>
           <a class="btn secondary" href="/">Already have an account? Login</a>
         </div>
       </div>
@@ -87,10 +90,16 @@
             After your email is verified, fill in your employee details. All fields marked * are required.
           </p>
 
-          <label>
-            Full Name *
-            <input type="text" id="signup-full-name" name="fullName" required />
-          </label>
+          <div class="row">
+            <label>
+              First Name *
+              <input type="text" id="signup-first-name" name="firstName" required />
+            </label>
+            <label>
+              Last Name *
+              <input type="text" id="signup-last-name" name="lastName" required />
+            </label>
+          </div>
           <label>
             Department *
             <input type="text" id="signup-department" name="department" required />
@@ -133,7 +142,6 @@
       </section>
     </main>
 
-    <script src="/js/theme.js"></script>
     <script src="/js/signup.js"></script>
   </body>
 </html>
