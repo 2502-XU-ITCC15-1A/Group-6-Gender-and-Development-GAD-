@@ -236,12 +236,12 @@ router.post('/create-account', async (req, res, next) => {
       return res.status(403).json({ message: 'Invalid registration scope.' });
     }
 
-    const { fullName, department, position, birthSex, genderIdentity, password } = req.body;
+    const { firstName, lastName, department, position, birthSex, genderIdentity, password } = req.body;
 
-    if (!fullName || !department || !position || !birthSex || !password) {
+    if (!firstName || !lastName || !department || !position || !birthSex || !password) {
       return res
         .status(400)
-        .json({ message: 'Full Name, Department, Position, Birth Sex, and Password are required.' });
+        .json({ message: 'First Name, Last Name, Department, Position, Birth Sex, and Password are required.' });
     }
 
     const existing = await Employee.findOne({ email: payload.email });
@@ -249,7 +249,11 @@ router.post('/create-account', async (req, res, next) => {
       return res.status(400).json({ message: 'An account with this email already exists.' });
     }
 
+    const fullName = `${firstName.trim()} ${lastName.trim()}`;
+
     const employee = await Employee.create({
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
       name: fullName,
       email: payload.email,
       department,
