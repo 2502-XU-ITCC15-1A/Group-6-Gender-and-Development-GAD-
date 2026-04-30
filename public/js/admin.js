@@ -1974,6 +1974,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Admin creation failed');
       if (createAdminStatusEl) createAdminStatusEl.textContent = 'Admin account created successfully.';
+      setTimeout(() => {
+        createAdminForm.reset();
+        if (createAdminStatusEl) createAdminStatusEl.textContent = '';
+      }, 2000);
     } catch (err) {
       if (createAdminStatusEl) createAdminStatusEl.textContent = err.message || 'Admin creation failed.';
     }

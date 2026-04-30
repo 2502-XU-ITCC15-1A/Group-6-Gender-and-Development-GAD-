@@ -1,12 +1,12 @@
 services:
   mongo:
     image: mongo:7
-    container_name: magis_mongo
+    container_name: gims_mongo
     restart: unless-stopped
     ports:
       - "27017:27017"
     volumes:
-      - magis_mongo_data:/data/db
+      - gims_mongo_data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -16,7 +16,7 @@ services:
 
   app:
     build: .
-    container_name: magis_app
+    container_name: gims_app
     restart: unless-stopped
     ports:
       - "4000:4000"
@@ -24,11 +24,11 @@ services:
       - .env
     environment:
       PORT: "4000"
-      MONGO_URI: "mongodb://mongo:27017/magis_gad"
+      MONGO_URI: "mongodb://mongo:27017/gims"
       NODE_ENV: "production"
     depends_on:
       mongo:
         condition: service_healthy
 
 volumes:
-  magis_mongo_data:
+  gims_mongo_data:
