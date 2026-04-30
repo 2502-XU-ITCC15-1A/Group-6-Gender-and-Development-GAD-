@@ -706,9 +706,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const getFileIcon = (fileURL) => {
     const ext = String(fileURL || '').split('.').pop().toLowerCase();
-    if (ext === 'pdf') return '📄';
-    if (ext === 'ppt' || ext === 'pptx') return '📊';
-    return '📎';
+    if (ext === 'pdf') return 'PDF';
+    if (ext === 'ppt' || ext === 'pptx') return 'PPT';
+    return 'FILE';
   };
 
   const renderSeminarMaterials = (materials) => {
@@ -927,10 +927,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
+  const renderEmailLink = (el, email) => {
+    if (!el) return;
+    const value = (email || '').trim();
+    if (!value) {
+      el.textContent = '—';
+      return;
+    }
+    const safeEmail = escapeHtml(value);
+    const composeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(value)}`;
+    el.innerHTML = `<a href="${composeUrl}" target="_blank" rel="noopener noreferrer" class="email-link" title="Compose email in Gmail">${safeEmail}</a>`;
+  };
+
   const showEmployeeProfile = async (row) => {
     if (profileNameEl) profileNameEl.textContent = row.name || '—';
     if (profileIdEl) profileIdEl.textContent = row.employeeId || '—';
-    if (profileEmailEl) profileEmailEl.textContent = row.email || '—';
+    renderEmailLink(profileEmailEl, row.email);
     if (profileDepartmentEl) profileDepartmentEl.textContent = row.department || '—';
     if (profilePositionEl) profilePositionEl.textContent = row.position || '—';
     if (profileStatusEl) {
@@ -965,7 +977,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (profileNameEl) profileNameEl.textContent = profile.name || row.name || '—';
       if (profileIdEl) profileIdEl.textContent = profile.employeeId || row.employeeId || '—';
-      if (profileEmailEl) profileEmailEl.textContent = profile.email || row.email || '—';
+      renderEmailLink(profileEmailEl, profile.email || row.email);
       if (profileDepartmentEl) profileDepartmentEl.textContent = profile.department || row.department || '—';
       if (profilePositionEl) profilePositionEl.textContent = profile.position || row.position || '—';
       if (profileStatusEl) {
@@ -1322,7 +1334,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             <div class="muted small">${escapeHtml(formatDate(seminar.date))} - ${escapeHtml(formatTime(seminar.startTime))}</div>
             ${Array.isArray(seminar.sessions) && seminar.sessions.length > 1
-              ? `<div class="muted small" style="color:var(--xu-blue); font-weight:600;">📅 ${seminar.sessions.length} sessions &bull; ${seminar.multiSessionType === 'pick-one' ? 'Pick one day' : 'Attend all'}</div>`
+              ? `<div class="muted small" style="color:var(--xu-blue); font-weight:600;">${seminar.sessions.length} sessions &bull; ${seminar.multiSessionType === 'pick-one' ? 'Pick one day' : 'Attend all'}</div>`
               : `<div class="muted small">Duration: ${escapeHtml(seminar.durationHours || 0)} hour(s)</div>`
             }
             <div class="muted small">Reserved: ${escapeHtml(registeredCount)}/${escapeHtml(capacity)}</div>
@@ -1559,7 +1571,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusBadge = `<span class="badge ${isComplete ? 'badge-green' : 'badge-red'}">${row.seminarStatus}</span>`;
         const accountBadge = getAccountStatusBadge(row.accountStatus);
         return `
-          <tr>
+          <tr data-row-id="${row.id}">
             <td><button class="table-link-btn" type="button" data-employee-profile="${row.id}">${escapeHtml(row.name)}</button></td>
             <td><input type="checkbox" class="admin-row-check" value="${row.id}" style="${checkboxStyle}" /></td>
             <td>${escapeHtml(row.employeeId)}</td>
@@ -1587,11 +1599,21 @@ document.addEventListener('DOMContentLoaded', () => {
       </table>
     `;
 
+    const syncRowSelection = (checkbox) => {
+      const tr = checkbox.closest('tr');
+      if (tr) tr.classList.toggle('is-selected', checkbox.checked);
+    };
+
+    employeesTableEl.querySelectorAll('.admin-row-check').forEach((checkbox) => {
+      checkbox.addEventListener('change', () => syncRowSelection(checkbox));
+    });
+
     document.getElementById('admin-select-all')?.addEventListener('change', (event) => {
       const checked = Boolean(event.target.checked);
       employeesTableEl.querySelectorAll('.admin-row-check').forEach((checkbox) => {
         if (checkbox.style.display === 'none') return;
         checkbox.checked = checked;
+        syncRowSelection(checkbox);
       });
     });
 

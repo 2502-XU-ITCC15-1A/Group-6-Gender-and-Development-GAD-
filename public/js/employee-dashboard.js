@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     notifDropdown: document.getElementById('notif-dropdown'),
     notifList: document.getElementById('notif-list'),
     notifReadAllBtn: document.getElementById('notif-read-all-btn'),
+    notifClearBtn: document.getElementById('notif-clear-btn'),
 
     // Seminar tab buttons
     seminarTabs: document.getElementById('seminar-tabs'),
@@ -292,6 +293,15 @@ document.addEventListener('DOMContentLoaded', () => {
   el.notifReadAllBtn?.addEventListener('click', async () => {
     try {
       await authedFetch('/api/employee/notifications/read-all', { method: 'PUT' });
+      await loadNotifications();
+    } catch {}
+  });
+
+  // Clear all notifications
+  el.notifClearBtn?.addEventListener('click', async () => {
+    if (!window.confirm('Clear all notifications? This cannot be undone.')) return;
+    try {
+      await authedFetch('/api/employee/notifications', { method: 'DELETE' });
       await loadNotifications();
     } catch {}
   });
@@ -590,9 +600,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const getMaterialFileIcon = (fileURL) => {
     const ext = String(fileURL || '').split('.').pop().toLowerCase();
-    if (ext === 'pdf') return '📄';
-    if (ext === 'ppt' || ext === 'pptx') return '📊';
-    return '📎';
+    if (ext === 'pdf') return 'PDF';
+    if (ext === 'ppt' || ext === 'pptx') return 'PPT';
+    return 'FILE';
   };
 
   const renderAttendedSeminars = (attendedSeminars) => {
@@ -640,7 +650,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 data-toggle-materials="${escapeHtml(s.id)}"
                 style="flex:1; min-width:120px;"
               >
-                📎 View Materials
+                View Materials
               </button>
             </div>
             <div id="materials-panel-${escapeHtml(s.id)}" style="display:none; margin-top:0.75rem; border-top:1px solid var(--border); padding-top:0.75rem;">
@@ -679,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.addEventListener('click', async () => {
         const isOpen = panel?.style.display !== 'none';
         if (panel) panel.style.display = isOpen ? 'none' : 'block';
-        btn.textContent = isOpen ? '📎 View Materials' : '📎 Hide Materials';
+        btn.textContent = isOpen ? 'View Materials' : 'Hide Materials';
 
         if (!isOpen && !loaded) {
           loaded = true;

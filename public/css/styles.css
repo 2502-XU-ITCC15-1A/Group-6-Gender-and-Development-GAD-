@@ -1,6 +1,8 @@
 :root {
   --xu-blue: #203a73;
   --xu-blue-2: #2c4b8c;
+  --xu-blue-deep: #14264f;
+  --xu-gold: #c9a24a;
   --header-blue: #0f2a44;
   --bg: #F9FAFB;
   --card-bg: #ffffff;
@@ -12,6 +14,8 @@
   --radius: 1rem; /* 16px */
   --radius-sm: 0.75rem; /* 12px */
   --ring: 0 0 0 3px rgba(32, 58, 115, 0.18);
+  --serif: 'EB Garamond', 'Berling Antiqua', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+  --sans: 'Century Gothic', 'CenturyGothic', 'AppleGothic', 'URW Gothic', 'Avenir Next', 'Avenir', 'Segoe UI', sans-serif;
 }
 
 html {
@@ -20,18 +24,18 @@ html {
 
 * {
   box-sizing: border-box;
-  font-family: 'Source Sans 3', sans-serif;
+  font-family: var(--sans);
 }
 
 h1,
 h2,
 h3 {
-  font-family: 'Manrope', sans-serif;
-  font-weight: 800;
+  font-family: var(--sans);
+  font-weight: 700;
 }
 
 .brand-title strong {
-  font-family: 'Manrope', sans-serif;
+  font-family: var(--sans);
   color: #ffffff;
 }
 
@@ -48,6 +52,11 @@ body {
   background-image: radial-gradient(circle at 0% 0%, rgba(15, 42, 68, 0.08) 0%, rgba(15, 42, 68, 0) 34%);
   font-size: 1.02rem;
   line-height: 1.55;
+  font-weight: 500;
+}
+
+p, span, label, a, li, td, th, input, button, select, textarea {
+  font-weight: 500;
 }
 
 body.has-hero-bg {
@@ -55,7 +64,7 @@ body.has-hero-bg {
 }
 
 .topbar .brand-title strong {
-  font-family: 'Manrope', sans-serif;
+  font-family: var(--sans);
 }
 
 /* Xavier University wordmark (Figma guide) */
@@ -67,15 +76,16 @@ body.has-hero-bg {
 }
 
 .wordmark .wordmark-xu {
-  font-family: 'Berling Antiqua', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+  font-family: var(--serif);
   font-weight: 600;
   color: #ffffff;
   font-size: 1.1rem;
 }
 
 .wordmark .wordmark-ateneo {
-  font-family: 'Berling Antiqua', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
-  font-weight: 600;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
   text-transform: none;
   letter-spacing: 0.03em;
   color: rgba(255, 255, 255, 0.88);
@@ -183,7 +193,7 @@ body.has-hero-bg .brand-title span {
 
 .topbar-user-name {
   color: #ffffff;
-  font-weight: 700;
+  font-weight: 500;
   font-size: 0.95rem;
 }
 
@@ -444,11 +454,23 @@ body.has-hero-bg .brand-title span {
 }
 
 .hero-magis {
-  background-image: linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.38)),
+  background-image: linear-gradient(135deg, rgba(8, 20, 42, 0.94), rgba(20, 38, 79, 0.82)),
     url('/images/xu-campus.webp');
   background-size: cover;
   background-position: center top;
   color: #e5e7eb;
+  position: relative;
+}
+
+.hero-magis::after {
+  content: '';
+  position: absolute;
+  left: 1rem;
+  bottom: 1.1rem;
+  width: 56px;
+  height: 2px;
+  background: var(--xu-gold, #c9a24a);
+  pointer-events: none;
 }
 
 .hero-magis .hero-inner {
@@ -481,11 +503,32 @@ body.has-hero-bg .brand-title span {
   color: #ffffff;
 }
 
+.hero-magis h1 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: clamp(2.2rem, 4.4vw, 3.2rem);
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+.hero-magis h1 span {
+  font-style: italic;
+  color: var(--xu-gold);
+  font-weight: 500;
+}
+
+.hero-magis .muted {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
 .landing-title {
-  font-family: 'Berling Antiqua', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+  font-family: var(--serif);
   color: #ffffff !important;
   font-size: clamp(2.7rem, 9.8vw, 5.8rem);
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: 0.02em;
   line-height: 0.95;
   margin: 0 0 0.32rem;
@@ -587,9 +630,27 @@ body.has-hero-bg .brand-title span {
 }
 
 .card h2 {
-  margin: 0 0 0.65rem;
-  font-size: 1.15rem;
-  font-weight: 800;
+  margin: 0 0 0.7rem;
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--xu-blue-deep);
+}
+
+.card h3 {
+  font-family: var(--serif);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--xu-blue-deep);
+}
+
+.card h4 {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--xu-blue-deep);
 }
 
 .muted {
@@ -612,8 +673,9 @@ body.has-hero-bg .brand-title span {
   color: #fff;
   text-decoration: none;
   font-weight: 600;
+  letter-spacing: 0.04em;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.15s ease, background 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.15s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .btn:hover {
@@ -733,6 +795,43 @@ textarea {
   background: #f8fafc;
   color: #0f172a;
   font-weight: 600;
+}
+
+.table tbody tr {
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.table tbody tr.is-selected {
+  background: var(--xu-blue);
+  color: #ffffff;
+}
+
+.table tbody tr.is-selected td {
+  color: #ffffff;
+  border-bottom-color: rgba(255, 255, 255, 0.18);
+}
+
+.table tbody tr.is-selected .table-link-btn {
+  color: #ffffff;
+  text-decoration-color: rgba(255, 255, 255, 0.6);
+}
+
+.table tbody tr.is-selected .badge {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.email-link {
+  color: var(--xu-blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.email-link:hover {
+  color: var(--xu-blue-2);
 }
 
 .badge {
@@ -1263,7 +1362,7 @@ textarea {
   background: transparent;
   color: var(--xu-blue);
   font: inherit;
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
   padding: 0;
   text-align: left;
@@ -1340,19 +1439,25 @@ textarea {
 
 .dashboard-sidebar {
   width: 268px;
-  background: var(--header-blue);
+  background: linear-gradient(180deg, var(--header-blue), var(--xu-blue-deep));
   color: #fff;
-  padding: 1.4rem 1.1rem;
-  border-radius: 0.9rem;
+  padding: 1.6rem 1.1rem;
+  border-radius: 1rem;
   position: sticky;
   top: 84px; /* below topbar */
   align-self: flex-start;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
 }
 
 .dashboard-sidebar h2 {
-  font-size: 1.1rem;
-  margin: 0 0 0.85rem;
-  letter-spacing: 0.2px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1.2rem;
+  margin: 0 0 1rem;
+  letter-spacing: 0;
+  color: var(--xu-gold);
 }
 
 .dashboard-sidebar-nav {
@@ -1401,8 +1506,10 @@ textarea {
 }
 
 .dashboard-sidebar-link.is-active {
-  background: #1e3a5f;
+  background: rgba(201, 162, 74, 0.16);
   color: #ffffff;
+  border-left: 3px solid var(--xu-gold);
+  padding-left: calc(0.8rem - 3px);
 }
 
 .dashboard-main {
@@ -1420,8 +1527,11 @@ textarea {
 
 .page-header h1 {
   margin: 0;
-  font-size: 1.25rem;
-  color: #0f172a;
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.7rem;
+  letter-spacing: 0;
+  color: var(--xu-blue-deep);
 }
 
 .page-header .page-subtitle {
@@ -1443,18 +1553,37 @@ textarea {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
+.stat-box {
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-box::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--xu-gold);
+}
+
 .stat-box h3 {
-  margin: 0 0 0.5rem;
-  font-size: 0.9rem;
-  color: #64748b;
-  letter-spacing: 0.15px;
+  margin: 0 0 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--xu-blue);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .stat-value {
   margin: 0;
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: var(--text);
+  font-family: var(--serif);
+  font-size: 2.2rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--xu-blue-deep);
 }
 
 /* Status badges (Admin table) */

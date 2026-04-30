@@ -5,8 +5,8 @@
     <title>GIMS - Employee Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap" media="print" onload="this.media='all'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap"></noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap"></noscript>
     <link rel="stylesheet" href="/css/styles.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -193,7 +193,10 @@
             <div class="notif-dropdown" id="notif-dropdown">
               <div class="notif-dropdown-header">
                 <span>Notifications</span>
-                <button class="btn secondary" id="notif-read-all-btn" type="button" style="padding: 0.2rem 0.6rem; font-size:0.8rem;">Mark all read</button>
+                <div style="display:flex; gap:0.4rem;">
+                  <button class="btn secondary" id="notif-read-all-btn" type="button" style="padding: 0.2rem 0.6rem; font-size:0.8rem;">Mark all read</button>
+                  <button class="btn secondary" id="notif-clear-btn" type="button" style="padding: 0.2rem 0.6rem; font-size:0.8rem; border-color:#dc2626; color:#b91c1c;">Clear</button>
+                </div>
               </div>
               <div class="notif-list" id="notif-list">
                 <div class="notif-empty">No notifications yet.</div>
