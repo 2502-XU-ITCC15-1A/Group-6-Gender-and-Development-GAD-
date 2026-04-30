@@ -601,6 +601,16 @@ router.put('/notifications/read-all', async (req, res, next) => {
   }
 });
 
+// Clear (delete) all notifications for this employee
+router.delete('/notifications', async (req, res, next) => {
+  try {
+    const result = await Notification.deleteMany({ employeeID: req.user.id });
+    res.json({ message: 'Notifications cleared', deleted: result.deletedCount || 0 });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Get evaluation form status for a registration
 router.get('/registrations/:registrationId/evaluation', async (req, res, next) => {
   try {
