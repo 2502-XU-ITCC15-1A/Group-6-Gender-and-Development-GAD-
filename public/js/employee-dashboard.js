@@ -1038,6 +1038,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.href = '/';
   });
 
+  const sidebarLinks = Array.from(
+    document.querySelectorAll('.dashboard-sidebar-link[data-scroll-target]')
+  );
   document.querySelectorAll('[data-scroll-target]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const targetId = btn.getAttribute('data-scroll-target');
@@ -1045,6 +1048,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const target = document.getElementById(targetId);
       if (!target) return;
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (btn.classList.contains('dashboard-sidebar-link')) {
+        sidebarLinks.forEach((link) => link.classList.remove('is-active'));
+        btn.classList.add('is-active');
+      }
     });
   });
 

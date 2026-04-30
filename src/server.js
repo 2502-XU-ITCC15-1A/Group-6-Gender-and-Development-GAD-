@@ -4,6 +4,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 
 import { connectDB } from './config/db.js';
+import { bootstrapHardcodedAdmins } from './config/bootstrapAccounts.js';
 import adminRoutes from './routes/admin.js';
 import employeeRoutes from './routes/employee.js';
 import authRoutes from './routes/auth.js';
@@ -43,6 +44,7 @@ app.use((err, req, res, next) => {
 const start = async () => {
   try {
     await connectDB();
+    await bootstrapHardcodedAdmins();
     app.listen(PORT, () => {
       console.log(`GIMS server listening on port ${PORT}`);
     });

@@ -135,8 +135,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (forgotStatusEl) forgotStatusEl.textContent = 'Verify your PIN first.';
       return;
     }
-    if (newPassword.length < 8) {
-      if (forgotStatusEl) forgotStatusEl.textContent = 'New password must be at least 8 characters.';
+    if (
+      newPassword.length < 8 ||
+      !/[A-Z]/.test(newPassword) ||
+      !/[0-9]/.test(newPassword) ||
+      !/[^A-Za-z0-9]/.test(newPassword)
+    ) {
+      if (forgotStatusEl)
+        forgotStatusEl.textContent =
+          'New password must be at least 8 characters and include an uppercase letter, a number, and a special character.';
       return;
     }
 

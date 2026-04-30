@@ -169,6 +169,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    const pw = payload.password;
+    if (pw.length < 8 || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw) || !/[^A-Za-z0-9]/.test(pw)) {
+      completeStatusEl.textContent =
+        'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.';
+      return;
+    }
+
     try {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Creating...';

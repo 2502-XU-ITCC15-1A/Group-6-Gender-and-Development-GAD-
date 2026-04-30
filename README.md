@@ -113,7 +113,7 @@ Open `http://localhost:4000`.
 
 Either:
 - Run the optional seed script: `node src/scripts/seedSamples.js`
-- Or use the **Create Admin Account** form inside the Admin Dashboard (requires an existing admin token), or call the bootstrap endpoint:
+- Or use the **Create Admin Account** form inside the Admin Dashboard, or call the bootstrap endpoint:
 
 ```bash
 POST http://localhost:4000/api/admin/seed-admin
