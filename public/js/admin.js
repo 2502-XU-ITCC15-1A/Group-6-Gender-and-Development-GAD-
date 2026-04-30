@@ -1965,6 +1965,13 @@ document.addEventListener('DOMContentLoaded', () => {
     event.preventDefault();
     if (createAdminStatusEl) createAdminStatusEl.textContent = '';
     const body = Object.fromEntries(new FormData(createAdminForm).entries());
+    const pw = String(body.password || '');
+    if (pw.length < 8 || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw) || !/[^A-Za-z0-9]/.test(pw)) {
+      if (createAdminStatusEl)
+        createAdminStatusEl.textContent =
+          'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.';
+      return;
+    }
     try {
       const res = await authedFetch('/api/admin/seed-admin', {
         method: 'POST',

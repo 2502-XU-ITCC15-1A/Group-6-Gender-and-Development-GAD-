@@ -1003,9 +1003,19 @@ textarea {
 }
 
 .join-consent-item input[type='checkbox'] {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   margin-top: 0.16rem;
+  accent-color: var(--xu-blue, #203a73);
+  cursor: pointer;
+}
+
+#eval-form input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--xu-gold, #c9a24a);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .join-consent-item span {
@@ -1505,11 +1515,14 @@ textarea {
   transform: translateY(-1px);
 }
 
-.dashboard-sidebar-link.is-active {
-  background: rgba(201, 162, 74, 0.16);
+.dashboard-sidebar-link.is-active,
+.dashboard-sidebar-link.is-active:hover {
+  background: rgba(201, 162, 74, 0.38);
   color: #ffffff;
-  border-left: 3px solid var(--xu-gold);
-  padding-left: calc(0.8rem - 3px);
+  border-left: 4px solid var(--xu-gold);
+  padding-left: calc(0.8rem - 4px);
+  transform: none;
+  box-shadow: inset 0 0 0 1px rgba(201, 162, 74, 0.45);
 }
 
 .dashboard-main {
