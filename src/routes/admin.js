@@ -6,7 +6,6 @@ import fs from 'fs';
 
 import Employee from '../models/Employee.js';
 import Seminar from '../models/Seminar.js';
-import Attendance from '../models/Attendance.js';
 import Registration from '../models/Registration.js';
 import Notification from '../models/Notification.js';
 import LearningMaterial from '../models/LearningMaterial.js';
@@ -103,7 +102,6 @@ const SEMINAR_DELETE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const permanentlyDeleteSeminarsByIds = async (seminarIds) => {
   if (!Array.isArray(seminarIds) || seminarIds.length === 0) return;
   await Registration.deleteMany({ seminarID: { $in: seminarIds } });
-  await Attendance.deleteMany({ seminar: { $in: seminarIds } });
   await Notification.deleteMany({ seminarID: { $in: seminarIds } });
   await Evaluation.deleteMany({ seminarID: { $in: seminarIds } });
   await Employee.updateMany(
@@ -148,21 +146,28 @@ const countActiveAttendedSeminars = (seminarIds, activeSeminarIdSet) => {
 
 router.post('/seed-admin', async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, birthSex } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
     if (!password) return res.status(400).json({ message: 'Password is required' });
 
+    const normalizedBirthSex = String(birthSex || '').trim();
+
     let employee = await Employee.findOne({ email: email.toLowerCase().trim() });
     if (!employee) {
+      if (!normalizedBirthSex) {
+        return res.status(400).json({ message: 'Birth Sex is required' });
+      }
       employee = await Employee.create({
         name: name || 'GIMS Admin',
         email: email.toLowerCase().trim(),
         department: 'GAD Office',
         position: 'Administrator',
+        birthSex: normalizedBirthSex,
         role: 'admin',
       });
     } else {
       employee.role = 'admin';
+      if (normalizedBirthSex) employee.birthSex = normalizedBirthSex;
       await employee.save();
     }
 
