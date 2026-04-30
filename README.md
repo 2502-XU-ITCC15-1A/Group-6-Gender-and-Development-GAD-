@@ -1,157 +1,152 @@
-# GADIMS – Gender and Development Management and Information System
+# GIMS – GAD Integrated Management System
 
-GADIMS is a web-based information system designed for the Xavier University Gender and Development (GAD) Office to manage seminars, employee participation, and compliance.
+GIMS is a web-based information system for the **Xavier University Gender and Development (GAD) Office**. It manages seminars, employee participation, evaluations, certificates, and compliance reporting.
 
-This implementation follows the architecture and tools described in the project papers:
-- Web-based system built with **Node.js**, **Express.js**, **MongoDB**
-- Integration with **Google Sheets** (from Google Forms responses)
-- Automated email notifications using **Gmail**
+Built with:
+- **Node.js**, **Express.js**, **MongoDB** (Mongoose)
+- **Gmail (Nodemailer)** for verification PINs and reminders
+- **Puppeteer** for certificate PDF generation
 - Role-based access (Admin and Employee dashboards)
 
 ## Core Features
 
-- **Admin Dashboard**
-  - View compliance summary and counts
-  - Filter non-compliant employees
-  - Manage seminars (with linked Google Sheet IDs)
-  - Trigger sync of seminar attendance from Google Sheets
-  - Post seminar **Articles/Updates** (title + image + text)
-  - Send bulk reminder emails
+### Admin Dashboard
+- Manage seminars (sessions, capacity, mandatory flag, certificate release mode)
+- Track registrations, attendance, and finalize per-session attendance
+- Issue and download seminar certificates
+- Manage employee accounts (create, deactivate, reset)
+- Post seminar **Articles / Updates**
+- Upload **Learning Materials** (PDF / PPT / PPTX)
+- Send bulk reminder emails for non-compliant employees
+- Department gender-mix reports (birth-sex based)
 
-- **Employee Portal**
-  - Login with employee account
-  - View own seminar completion status
-  - View list of attended seminars
-  - View latest seminar **Articles/Updates** with “Read more” expand
+### Employee Portal
+- Sign up via Gmail PIN verification
+- View own compliance status and required seminars
+- Register for upcoming seminars
+- Submit seminar evaluations
+- Download earned certificates
+- Read latest seminar Articles / Updates
 
 ## Project Structure
 
-- `src/server.js` – Express app bootstrap
-- `src/config/db.js` – MongoDB connection for the `gadims` database
-- `src/models/Employee.js` – Employee profile and role data
-- `src/models/Seminar.js` – Seminar metadata (date, time, capacity, mandatory, etc.)
-- `src/models/Registration.js` – Seminar registrations and attendance status
-- `src/models/LearningMaterial.js` – Learning materials uploaded by admins
-- `src/models/User.js` – User accounts for admin/employee login
-- `src/models/PinVerification.js` – One-time PIN codes for sign-up verification
-- `src/services/emailService.js` – Sends verification PINs and reminders through Gmail
-- `src/routes/auth.js` – GADIMS authentication (PIN, sign-up, login)
-- `src/routes/admin.js` – Admin API (seminars, materials, reports, reminders)
-- `src/routes/employee.js` – Employee API (profile, seminars, materials, history)
-- `src/models/Article.js` – Seminar articles/updates
-- `public/*` – HTML/CSS/JS dashboards for GADIMS admin and employees
+```
+src/
+  server.js                 Express bootstrap
+  config/db.js              MongoDB connection (database: gims)
+  models/
+    Article.js              Seminar articles / updates
+    Employee.js             Employee profile + role
+    Evaluation.js           Post-seminar evaluation responses
+    LearningMaterial.js     Uploaded materials metadata
+    Notification.js         In-app notifications
+    PasswordReset.js        One-time password-reset PINs
+    PinVerification.js      Sign-up PIN verification
+    Registration.js         Seminar registration + per-session attendance
+    Seminar.js              Seminar metadata
+    User.js                 Login accounts (admin / employee)
+  routes/
+    admin.js                Admin API
+    auth.js                 Sign-up, login, PIN, password reset
+    employee.js             Employee API
+  services/
+    certificateService.js   Certificate rendering / issuance (Puppeteer)
+    emailService.js         Gmail-based PIN + reminder emails
+  scripts/
+    seedSamples.js          Optional: seed sample admin/employee/seminar data
+public/
+  admin.html, employee.html, signup.html, login.html, index.html
+  css/                      Stylesheets
+  js/                       Frontend scripts
+  images/                   Static images
+  uploads/                  Runtime user uploads (gitignored)
+```
 
 ## Environment Configuration
 
-Create a `.env` file in the project root:
+Copy `.env.example` to `.env` and fill in real values:
 
 ```env
 PORT=4000
-MONGO_URI=mongodb://127.0.0.1:27017/magis_gad
+MONGO_URI=mongodb://127.0.0.1:27017/gims
 JWT_SECRET=change-this-secret
+USE_IN_MEMORY_DB=false
 
-# Gmail (using app password)
+# Gmail (use an App Password)
 GMAIL_USER=your-xu-gad-email@example.com
 GMAIL_APP_PASSWORD=your-app-password
 
-# Google service account JSON (as a single line JSON string)
-GOOGLE_SERVICE_ACCOUNT_JSON={"client_email":"...","private_key":"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n", ...}
-
-# Default range for Google Form responses
-GOOGLE_SHEET_RANGE=Form Responses 1!A2:F
+# Branding
+ORG_NAME=Xavier University – Ateneo de Cagayan
+SYSTEM_NAME=GIMS
 ```
 
-> Do **not** commit `.env` or real credentials.
+> **Never commit `.env` or real credentials.** `.env` is gitignored.
+> Set `USE_IN_MEMORY_DB=true` to spin up an ephemeral MongoDB for local testing without installing MongoDB.
 
 ## Installation & Running
 
+### Local (Node + MongoDB)
+
 ```bash
-cd magis-system
 npm install
 npm run dev
 ```
 
-The app will run at `http://localhost:4000`.
+The app runs at `http://localhost:4000`.
 
-### Run “directly” with Docker (recommended)
-
-If you want the system to run immediately without installing MongoDB locally:
+### Docker (recommended)
 
 ```bash
-cd magis-system
 docker compose up --build
 ```
 
-Then open `http://localhost:4000`.
+This brings up two containers:
+- `gims_mongo` (MongoDB 7, database name `gims`)
+- `gims_app` (the Node app, port 4000)
 
-### 1. Create an admin user
+Open `http://localhost:4000`.
 
-Use any REST client (or `curl`) to call:
+## First-Time Setup
+
+### 1. Create an admin account
+
+Either:
+- Run the optional seed script: `node src/scripts/seedSamples.js`
+- Or use the **Create Admin Account** form inside the Admin Dashboard (requires an existing admin token), or call the bootstrap endpoint:
 
 ```bash
 POST http://localhost:4000/api/admin/seed-admin
 Content-Type: application/json
 
 {
-  "username": "gad_admin",
-  "password": "StrongPassword123"
+  "name": "GIMS Admin",
+  "email": "gad.admin@xu.edu.ph",
+  "password": "StrongPassword123",
+  "birthSex": "Female"
 }
 ```
 
-Then log in from `public/admin.html`.
+Then log in from `/admin.html`.
 
-### 2. Create a seminar linked to a Google Sheet
+### 2. Create seminars and learning materials
 
-```bash
-POST /api/admin/seminars
-Authorization: Bearer <admin_token>
-Content-Type: application/json
+Use the Admin Dashboard:
+- **Manage Seminars** → create sessions, set capacity, mandatory flag, certificate release mode.
+- **Learning Materials** → upload PDFs / PPTs (max 50 MB each).
 
-{
-  "title": "Gender Sensitivity Training 1",
-  "date": "2026-03-10",
-  "topic": "Gender Sensitivity",
-  "facilitator": "GAD Office",
-  "googleSheetId": "YOUR_SHEET_ID_HERE"
-}
-```
+### 3. Employee onboarding
 
-### 3. Sync seminar attendance from Google Sheets
+Employees sign up at `/signup.html` using their `@xu.edu.ph` Gmail. A 6-digit PIN is emailed for verification, after which they set a password and log in at `/login.html`.
 
-```bash
-POST /api/admin/seminars/:id/sync-sheets
-Authorization: Bearer <admin_token>
-```
+## Security Notes
 
-This will:
-- Read responses from the linked Google Sheet
-- Create/update `Employee` records
-- Create `Attendance` records
-- Recompute `completedSeminarsCount` per employee
+- `.env` and `public/uploads/*` are gitignored — never commit secrets or user uploads.
+- Passwords are hashed with **bcryptjs**; only password hashes are stored.
+- Admin / employee routes are gated by JWT (`JWT_SECRET`). Rotate the secret in production.
+- Gmail uses an **App Password**, not the account password. Revoke if leaked.
+- File uploads are restricted by extension and size (PDF/PPT/PPTX only for materials, ≤50 MB).
 
-### 4. Send bulk reminder emails
+## License
 
-```bash
-POST /api/admin/notifications/reminders
-Authorization: Bearer <admin_token>
-```
-
-Emails are sent to employees who have fewer completed seminars than their `requiredSeminarsPerYear`.
-
-## Posting Seminar Articles (Admin)
-
-In `Admin Dashboard` → `Post Seminar Article`:
-- Add a **title**
-- (Optional) link to a **seminar**
-- (Optional) upload a **cover image**
-- Add the **article text**
-
-Employees will see the latest posts on the Employee Portal and can click **Read more** to open the full article.
-
-## Notes & Assumptions
-
-- Google Forms → Google Sheets connection is configured manually in Google Workspace.
-- The service account used for Sheets must have access to the target spreadsheets.
-- Employee accounts (`User` with role `employee`) can be created via the Admin Dashboard (“Create Employee Account”).
-- This is a semester-scale implementation focused on core monitoring, reporting, and notifications, consistent with the approved project scope.
-
+MIT — see `package.json`.

@@ -1,5 +1,5 @@
 {
-  "name": "magis-gad-information-system",
+  "name": "gims",
   "version": "1.0.0",
   "description": "GIMS (GAD Integrated Management System) for Xavier University GAD Office",
   "main": "src/server.js",
@@ -11,9 +11,7 @@
   "keywords": [
     "GIMS",
     "GAD",
-    "seminar-tracking",
-    "google-sheets",
-    "gmail-api"
+    "seminar-tracking"
   ],
   "author": "Group 1 / Group 6",
   "license": "MIT",
@@ -23,7 +21,6 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "googleapis": "^140.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongodb-memory-server": "^9.4.0",
     "mongoose": "^8.3.1",
