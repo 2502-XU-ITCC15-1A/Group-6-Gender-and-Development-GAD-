@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GIMS – GAD Integrated Management System | Xavier University</title>
+    <meta name="description" content="GIMS is the GAD Integrated Management System of Xavier University Ateneo de Cagayan – for inclusive, accountable, and data-driven gender and development work." />
+    <meta property="og:title" content="GIMS – GAD Integrated Management System | Xavier University" />
+    <meta property="og:description" content="The official Gender and Development management platform for Xavier University employees and administrators. Register for GAD seminars and track your compliance." />
+    <meta property="og:type" content="website" />
+    <link rel="preload" as="image" href="/images/xu-campus.webp" type="image/webp">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Manrope:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Manrope:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap"></noscript>
+    <link rel="stylesheet" href="/css/styles-landing.css" />
+  </head>
+  <body class="has-hero-bg landing-body">
+    <header class="topbar topbar-floating" id="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/" aria-label="Refresh GIMS landing page">
+          <div class="wordmark" aria-label="Xavier University Ateneo de Cagayan">
+            <div class="wordmark-xu">Xavier University</div>
+            <div class="wordmark-ateneo">Ateneo de Cagayan</div>
+          </div>
+        </a>
+        <nav class="topbar-nav" aria-label="Primary">
+          <a class="nav-link" href="#mission">Mission</a>
+          <a class="nav-link" href="#access">Access</a>
+        </nav>
+      </div>
+    </header>
+
+    <section class="hero hero-magis hero-landing">
+      <div class="hero-inner hero-grid">
+        <div class="hero-copy">
+          <span class="hero-eyebrow">Xavier University &middot; Ateneo de Cagayan</span>
+          <h1 class="landing-title">GIMS</h1>
+          <span class="title-rule" aria-hidden="true"></span>
+          <p class="hero-tagline">
+            <em>GAD Integrated</em><br />
+            Management System
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-ghost" href="#mission">Our Mission</a>
+          </div>
+        </div>
+
+        <div class="hero-highlight login-highlight" id="sign-in">
+
+          <!-- Step 1: Login -->
+          <div id="lp-step-login">
+            <span class="card-eyebrow">Sign In</span>
+            <h2 class="card-title">Welcome back.</h2>
+            <p class="muted small">One universal login for administrators and employees.</p>
+            <form id="login-form" class="login-inline-form">
+              <label>
+                Email address
+                <input type="email" name="email" autocomplete="username" required />
+              </label>
+              <label>
+                Password
+                <div class="password-field">
+
+<input type="password" name="password" autocomplete="current-password" required />
+
+<button type="button" class="password-toggle" aria-label="Show password"></button>
+
+</div>
+
+</label>
+
+<div class="muted small" style="margin-top:0.35rem; text-align:right;">
+  <button type="button" id="lp-forgot-btn" class="text-link-btn">Forgot password?</button>
+</div>
+
+<button class="btn btn-primary btn-block" type="submit" style="margin-top: 1rem; margin-bottom: 1.5rem;">
+  Continue
+</button>
+<p class="status" id="login-status"></p>
+</form>
+
+<p class="muted small" style="margin-top: 0.85rem; text-align: center;">
+  New employee? <a href="/signup.html">Create account</a>
+</p>
+          </div>
+
+          <!-- Step 2: Enter email -->
+          <div id="lp-step-email" style="display:none;">
+            <span class="card-eyebrow">Recover</span>
+            <h2 class="card-title">Reset Password</h2>
+            <p class="muted small">Enter your XU email to receive a reset PIN.</p>
+            <div class="login-inline-form">
+              <label>
+                XU Email
+                <input type="email" id="lp-fp-email" placeholder="name@xu.edu.ph" autocomplete="username" />
+              </label>
+              <button class="btn btn-primary btn-block" type="button" id="lp-fp-send-btn">Send PIN</button>
+              <p class="status" id="lp-fp-status"></p>
+            </div>
+            <p class="muted small" style="margin-top:0.75rem;">
+              <button type="button" id="lp-fp-back-to-login" class="text-link-btn">&larr; Back to sign in</button>
+            </p>
+          </div>
+
+          <!-- Step 3: Enter PIN -->
+          <div id="lp-step-pin" style="display:none;">
+            <span class="card-eyebrow">Verify</span>
+            <h2 class="card-title">Check your email.</h2>
+            <p class="muted small" id="lp-fp-pin-hint">A 6-digit PIN was sent to your email.</p>
+            <div class="login-inline-form">
+              <label>
+                Verification PIN
+                <input type="text" id="lp-fp-pin" maxlength="6" inputmode="numeric" placeholder="6-digit PIN" autocomplete="one-time-code" />
+              </label>
+              <div class="pin-actions">
+                <button class="btn btn-primary" type="button" id="lp-fp-verify-btn">Verify PIN</button>
+                <button class="btn btn-ghost" type="button" id="lp-fp-resend-btn">Resend PIN</button>
+              </div>
+              <p class="status" id="lp-fp-pin-status"></p>
+            </div>
+            <p class="muted small" style="margin-top:0.75rem;">
+              <button type="button" id="lp-fp-back-to-email" class="text-link-btn">&larr; Back</button>
+            </p>
+          </div>
+
+          <!-- Step 4: New password -->
+          <div id="lp-step-newpw" style="display:none;">
+            <span class="card-eyebrow">Finish</span>
+            <h2 class="card-title">Set a new password.</h2>
+            <p class="muted small">Choose a new password for your GIMS account.</p>
+            <div class="login-inline-form">
+              <label>
+                New Password
+                <div class="password-field">
+                  <input type="password" id="lp-fp-newpw" minlength="8" placeholder="At least 8 characters" autocomplete="new-password" />
+                  <button type="button" class="password-toggle" aria-label="Show password"></button>
+                </div>
+              </label>
+              <button class="btn btn-primary btn-block" type="button" id="lp-fp-confirm-btn">Update Password</button>
+              <p class="status" id="lp-fp-newpw-status"></p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <a class="scroll-cue" href="#mission" aria-label="Scroll to learn more">
+        <span class="scroll-cue-label">Learn more</span>
+        <span class="scroll-cue-arrow" aria-hidden="true">&darr;</span>
+      </a>
+    </section>
+
+    <section class="story" id="mission">
+      <div class="story-inner">
+        <span class="section-eyebrow">Our Mission</span>
+        <h2 class="story-heading">
+          <em>Magis</em> in service of <br />
+          <span class="story-emph">gender equity.</span>
+        </h2>
+        <p class="story-lead">
+          GIMS gathers every GAD seminar, certificate, and compliance record into a single
+          accountable platform &mdash; so every Xavier employee, every department, and every
+          policy decision moves forward together.
+        </p>
+
+        <div class="story-grid">
+          <article class="story-card">
+            <span class="story-num">01</span>
+            <h3>Inclusive</h3>
+            <p>Built for every member of the Xavier community &mdash; faculty, staff, and student workers alike.</p>
+          </article>
+          <article class="story-card">
+            <span class="story-num">02</span>
+            <h3>Accountable</h3>
+            <p>Transparent records of attendance, evaluation, and certification at every level.</p>
+          </article>
+          <article class="story-card">
+            <span class="story-num">03</span>
+            <h3>Data&#8209;driven</h3>
+            <p>Department-level insights that turn participation into policy and progress.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="access" id="access">
+      <div class="access-inner">
+        <span class="section-eyebrow access-eyebrow">For the Community</span>
+        <h2 class="access-heading">Two roles. <em>One platform.</em></h2>
+        <div class="access-grid">
+          <div class="access-card">
+            <h3>Employees</h3>
+            <p>Register for upcoming GAD seminars, track your attendance, download certificates, and access your seminar materials &mdash; all in one place.</p>
+            <a class="text-link" href="/signup.html">Create your account &rarr;</a>
+          </div>
+          <div class="access-card">
+            <h3>Administrators</h3>
+            <p>Manage seminars, monitor compliance across departments, generate reports, and keep the GAD record of Xavier University accurate and current.</p>
+            <a class="text-link" href="#sign-in">Sign in &rarr;</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="landing-footer">
+      <div class="landing-footer-inner">
+        <div class="landing-footer-brand">
+          <div class="wordmark">
+            <div class="wordmark-xu">Xavier University</div>
+            <div class="wordmark-ateneo">Ateneo de Cagayan</div>
+          </div>
+          <p class="muted small">GAD Integrated Management System</p>
+        </div>
+        <p class="muted small">&copy; Xavier University Ateneo de Cagayan &middot; All rights reserved.</p>
+      </div>
+    </footer>
+
+    <script src="/js/login.js"></script>
+  </body>
+</html>
