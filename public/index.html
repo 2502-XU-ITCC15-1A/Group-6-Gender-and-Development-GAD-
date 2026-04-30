@@ -2,9 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>GIMS – GAD Integrated Management System</title>
-    <link rel="stylesheet" href="/css/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GIMS – GAD Integrated Management System | Xavier University</title>
+    <meta name="description" content="GIMS is the GAD Integrated Management System of Xavier University Ateneo de Cagayan – for inclusive, accountable, and data-driven gender and development work." />
+    <meta property="og:title" content="GIMS – GAD Integrated Management System | Xavier University" />
+    <meta property="og:description" content="The official Gender and Development management platform for Xavier University employees and administrators. Register for GAD seminars and track your compliance." />
+    <meta property="og:type" content="website" />
+    <link rel="preload" as="image" href="/images/xu-campus.webp" type="image/webp">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap"></noscript>
+    <link rel="stylesheet" href="/css/styles-landing.css" />
   </head>
   <body class="has-hero-bg">
     <header class="topbar" id="topbar">
@@ -19,12 +28,11 @@
           </div>
         </a>
         <div class="topbar-actions">
-          <span class="theme-emoji" role="button" tabindex="0" data-theme-toggle aria-label="Toggle theme">☾</span>
         </div>
       </div>
     </header>
 
-    <section class="hero hero-magis">
+    <section class="hero hero-magis hero-landing">
       <div class="hero-overlay"></div>
       <div class="hero-inner hero-grid">
         <div class="hero-copy">
@@ -38,23 +46,87 @@
           </p>
         </div>
         <div class="hero-highlight login-highlight">
-          <h2>Sign In</h2>
-          <p class="muted">One universal login for both administrators and employees.</p>
-          <form id="login-form" class="login-inline-form">
-            <label>
-              Email address
-              <input type="email" name="email" autocomplete="username" required />
-            </label>
-            <label>
-              Password
-              <input type="password" name="password" autocomplete="current-password" required />
-            </label>
-            <button class="btn" type="submit">Login</button>
-            <p class="status" id="login-status"></p>
-          </form>
-          <p class="muted small" style="margin-top: 0.75rem;">
-            New employee? <a href="/signup.html">Create account</a>
-          </p>
+
+          <!-- Step 1: Login -->
+          <div id="lp-step-login">
+            <h2>Sign In</h2>
+            <p class="muted">One universal login for both administrators and employees.</p>
+            <form id="login-form" class="login-inline-form">
+              <label>
+                Email address
+                <input type="email" name="email" autocomplete="username" required />
+              </label>
+              <label>
+                Password
+                <div class="password-field">
+                  <input type="password" name="password" autocomplete="current-password" required />
+                  <button type="button" class="password-toggle" aria-label="Show password"></button>
+                </div>
+              </label>
+              <button class="btn" type="submit">Login</button>
+              <p class="status" id="login-status"></p>
+            </form>
+            <p class="muted small" style="margin-top:0.75rem;">
+              New employee? <a href="/signup.html">Create account</a>
+            </p>
+            <p class="muted small" style="margin-top:0.35rem;">
+              <button type="button" id="lp-forgot-btn" class="text-link-btn">Forgot password?</button>
+            </p>
+          </div>
+
+          <!-- Step 2: Enter email -->
+          <div id="lp-step-email" style="display:none;">
+            <h2>Reset Password</h2>
+            <p class="muted">Enter your XU email to receive a reset PIN.</p>
+            <div class="login-inline-form">
+              <label>
+                XU Email
+                <input type="email" id="lp-fp-email" placeholder="name@xu.edu.ph" autocomplete="username" />
+              </label>
+              <button class="btn" type="button" id="lp-fp-send-btn">Send PIN</button>
+              <p class="status" id="lp-fp-status"></p>
+            </div>
+            <p class="muted small" style="margin-top:0.75rem;">
+              <button type="button" id="lp-fp-back-to-login" class="text-link-btn">← Back to login</button>
+            </p>
+          </div>
+
+          <!-- Step 3: Enter PIN -->
+          <div id="lp-step-pin" style="display:none;">
+            <h2>Check Your Email</h2>
+            <p class="muted" id="lp-fp-pin-hint">A 6-digit PIN was sent to your email.</p>
+            <div class="login-inline-form">
+              <label>
+                Verification PIN
+                <input type="text" id="lp-fp-pin" maxlength="6" inputmode="numeric" placeholder="6-digit PIN" autocomplete="one-time-code" />
+              </label>
+              <button class="btn" type="button" id="lp-fp-verify-btn">Verify PIN</button>
+              <p class="status" id="lp-fp-pin-status"></p>
+            </div>
+            <p class="muted small" style="margin-top:0.75rem;">
+              <button type="button" id="lp-fp-resend-btn" class="text-link-btn">Resend PIN</button>
+              &nbsp;·&nbsp;
+              <button type="button" id="lp-fp-back-to-email" class="text-link-btn">← Back</button>
+            </p>
+          </div>
+
+          <!-- Step 4: New password -->
+          <div id="lp-step-newpw" style="display:none;">
+            <h2>New Password</h2>
+            <p class="muted">Choose a new password for your GIMS account.</p>
+            <div class="login-inline-form">
+              <label>
+                New Password
+                <div class="password-field">
+                  <input type="password" id="lp-fp-newpw" minlength="8" placeholder="At least 8 characters" autocomplete="new-password" />
+                  <button type="button" class="password-toggle" aria-label="Show password"></button>
+                </div>
+              </label>
+              <button class="btn" type="button" id="lp-fp-confirm-btn">Update Password</button>
+              <p class="status" id="lp-fp-newpw-status"></p>
+            </div>
+          </div>
+
         </div>
       </div>
     </section>
@@ -65,7 +137,6 @@
       </footer>
     </main>
 
-    <script src="/js/theme.js"></script>
     <script src="/js/login.js"></script>
   </body>
 </html>

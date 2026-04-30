@@ -7,6 +7,12 @@ services:
       - "27017:27017"
     volumes:
       - magis_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   app:
     build: .
@@ -14,18 +20,15 @@ services:
     restart: unless-stopped
     ports:
       - "4000:4000"
+    env_file:
+      - .env
     environment:
       PORT: "4000"
       MONGO_URI: "mongodb://mongo:27017/magis_gad"
-      JWT_SECRET: "change-this-secret"
-      # Set these in a local .env if you want Sheets + Gmail enabled
-      GMAIL_USER: "${GMAIL_USER}"
-      GMAIL_APP_PASSWORD: "${GMAIL_APP_PASSWORD}"
-      GOOGLE_SERVICE_ACCOUNT_JSON: "${GOOGLE_SERVICE_ACCOUNT_JSON}"
-      GOOGLE_SHEET_RANGE: "${GOOGLE_SHEET_RANGE}"
+      NODE_ENV: "production"
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
 
 volumes:
   magis_mongo_data:
-
