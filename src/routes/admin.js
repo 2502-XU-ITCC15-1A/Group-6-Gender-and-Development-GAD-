@@ -18,6 +18,7 @@ import {
   renderCertificateBuffer,
   issueCertificateForRegistration,
 } from '../services/certificateService.js';
+import { generateCHEDReport } from '../services/reportService.js';
 
 const router = express.Router();
 
@@ -1301,10 +1302,107 @@ router.get('/materials', authMiddleware, async (req, res, next) => {
   }
 });
 
+const parseIdsParam = (raw) => {
+  if (!raw) return null;
+  const ids = String(raw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return ids.length ? ids : null;
+};
+
+router.get('/reports/ched.pdf', authMiddleware, async (req, res, next) => {
+  try {
+    const filter = { role: 'employee', accountStatus: { $ne: 'deactivated' } };
+    const ids = parseIdsParam(req.query.ids);
+    if (ids) filter._id = { $in: ids };
+    const [employees, activeSeminarIdSet] = await Promise.all([
+      Employee.find(filter)
+        .select('name department position birthSex genderIdentity seminarsAttended requiredSeminarsPerYear')
+        .lean(),
+      buildActiveSeminarIdSet(),
+    ]);
+
+    const totalEmployees = employees.length;
+
+    let totalCompliant = 0;
+    let compliantMaleCount = 0;
+    let compliantFemaleCount = 0;
+    let compliantIntersexCount = 0;
+    let compliantOtherBirthSexCount = 0;
+
+    const deptStats = new Map();
+    const employeeRows = [];
+
+    employees.forEach((emp) => {
+      const required = Number(emp.requiredSeminarsPerYear || 5);
+      const attended = countActiveAttendedSeminars(emp.seminarsAttended, activeSeminarIdSet);
+      const isCompliant = attended >= required;
+      const dept = (emp.department || 'Unassigned').trim() || 'Unassigned';
+      const sex = String(emp.birthSex || '').trim().toLowerCase();
+
+      if (!deptStats.has(dept)) deptStats.set(dept, { total: 0, compliant: 0 });
+      const stat = deptStats.get(dept);
+      stat.total += 1;
+      if (isCompliant) stat.compliant += 1;
+
+      if (isCompliant) {
+        totalCompliant += 1;
+        if (sex === 'male') compliantMaleCount += 1;
+        else if (sex === 'female') compliantFemaleCount += 1;
+        else if (sex === 'intersex') compliantIntersexCount += 1;
+        else compliantOtherBirthSexCount += 1;
+      }
+
+      employeeRows.push({
+        name: emp.name,
+        department: dept,
+        position: emp.position,
+        birthSex: emp.birthSex,
+        genderIdentity: emp.genderIdentity,
+        seminarCount: attended,
+      });
+    });
+
+    const totalNonCompliant = totalEmployees - totalCompliant;
+    const complianceRatePercent =
+      totalEmployees === 0 ? 0 : Number(((totalCompliant / totalEmployees) * 100).toFixed(1));
+
+    const departmentCompliance = Array.from(deptStats.entries())
+      .map(([department, { total, compliant }]) => ({
+        department,
+        complianceRatePercent: total === 0 ? 0 : Number(((compliant / total) * 100).toFixed(1)),
+      }))
+      .sort((a, b) => b.complianceRatePercent - a.complianceRatePercent);
+
+    const pdfBuffer = await generateCHEDReport({
+      totalEmployees,
+      totalCompliant,
+      totalNonCompliant,
+      complianceRatePercent,
+      compliantMaleCount,
+      compliantFemaleCount,
+      compliantIntersexCount,
+      compliantOtherBirthSexCount,
+      departmentCompliance,
+      employees: employeeRows,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="gims_ched_report.pdf"');
+    res.send(pdfBuffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/reports/employees.csv', authMiddleware, async (req, res, next) => {
   try {
+    const filter = {};
+    const ids = parseIdsParam(req.query.ids);
+    if (ids) filter._id = { $in: ids };
     const [employees, activeSeminarIdSet] = await Promise.all([
-      Employee.find().lean(),
+      Employee.find(filter).lean(),
       buildActiveSeminarIdSet(),
     ]);
 
