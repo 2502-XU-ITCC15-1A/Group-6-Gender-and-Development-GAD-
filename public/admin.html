@@ -83,6 +83,104 @@
       .session-cal-day:disabled:not(.is-selected):not(.is-locked) { cursor:not-allowed; opacity:0.32; }
       .session-row { display:flex; align-items:flex-start; gap:0.55rem; padding:0.5rem 0.65rem; border:1px solid var(--border); border-radius:0.55rem; background:#fff; }
       .multi-session-toggle-label { grid-column:1/-1; display:flex; align-items:center; gap:0.6rem; cursor:pointer; margin-bottom:0; padding:0.6rem 0.85rem; border:1px solid var(--border); border-radius:0.55rem; background:rgba(32,58,115,0.04); }
+
+      /* Searchable combobox (filters) */
+      .combobox { position: relative; display: block; margin-top: 0.35rem; }
+      .combobox-search {
+        width: 100%;
+        padding: 0.55rem 3.6rem 0.55rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        font-size: 0.92rem;
+        background: #fff;
+        font-weight: 500;
+      }
+      .combobox-search:focus {
+        outline: none;
+        border-color: var(--xu-blue);
+        box-shadow: 0 0 0 3px rgba(32,58,115,0.12);
+      }
+      .combobox-clear {
+        position: absolute;
+        right: 1.7rem; top: 50%; transform: translateY(-50%);
+        background: none; border: none; cursor: pointer;
+        font-size: 1.1rem; color: #9ca3af; padding: 0 0.25rem;
+        line-height: 1; display: none;
+      }
+      .combobox-clear:hover { color: #374151; }
+      .combobox.has-value .combobox-clear { display: inline-block; }
+      .combobox-caret {
+        position: absolute;
+        right: 0.65rem; top: 50%; transform: translateY(-50%);
+        color: #6b7280; pointer-events: none; font-size: 0.85rem;
+      }
+      .combobox-panel {
+        position: absolute;
+        top: calc(100% + 0.25rem); left: 0; right: 0;
+        max-height: 260px; overflow-y: auto;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 0.55rem;
+        box-shadow: 0 12px 30px rgba(15,23,42,0.12);
+        z-index: 30;
+        display: none;
+        padding: 0.3rem 0;
+      }
+      .combobox.is-open .combobox-panel { display: block; }
+      .combobox-option {
+        padding: 0.45rem 0.85rem;
+        font-size: 0.9rem;
+        cursor: pointer;
+        color: #1f2937;
+      }
+      .combobox-option:hover, .combobox-option.is-active {
+        background: rgba(32,58,115,0.08);
+        color: var(--xu-blue);
+      }
+      .combobox-option.is-selected { font-weight: 700; color: var(--xu-blue); }
+      .combobox-empty {
+        padding: 0.6rem 0.85rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+        font-style: italic;
+      }
+
+      /* Google-style filter chip select */
+      .filter-chip-select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        background-color: #fff;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 0.7rem center;
+        background-size: 12px;
+        border: 1px solid #dadce0;
+        border-radius: 999px;
+        padding: 0.45rem 2rem 0.45rem 0.95rem;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #1f2937;
+        cursor: pointer;
+        margin-top: 0;
+        transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+      }
+      .filter-chip-select:hover {
+        border-color: #b8b8b8;
+        background-color: #f8fafc;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+      }
+      .filter-chip-select:focus {
+        outline: none;
+        border-color: var(--xu-blue);
+        background-color: rgba(32, 58, 115, 0.04);
+        box-shadow: 0 0 0 3px rgba(32, 58, 115, 0.18);
+      }
+      .filter-chip-select.is-active {
+        background-color: rgba(32, 58, 115, 0.08);
+        border-color: var(--xu-blue);
+        color: var(--xu-blue);
+      }
     </style>
   </head>
   <body>
@@ -162,7 +260,7 @@
               </section>
             </div>
 
-            <section class="card" style="margin-top: 1.25rem;">
+            <section class="card" id="admin-employees-card" style="margin-top: 1.25rem;">
               <h2>Employee Records</h2>
               <p class="muted">Select employees to send reminders and export reports.</p>
 
@@ -173,20 +271,34 @@
                 </label>
 
                 <label style="margin-bottom: 0; min-width: 220px;">
-                  Filter by Department
-                  <select id="admin-department-filter">
-                    <option value="">All</option>
-                  </select>
+                  Filter by Cluster
+                  <div class="combobox" id="admin-cluster-combobox">
+                    <input type="text" class="combobox-search" placeholder="Cluster" autocomplete="off" />
+                    <button type="button" class="combobox-clear" aria-label="Clear" tabindex="-1">×</button>
+                    <span class="combobox-caret" aria-hidden="true">▾</span>
+                    <div class="combobox-panel" role="listbox"></div>
+                    <input type="hidden" id="admin-cluster-filter" value="" />
+                  </div>
                 </label>
 
                 <label style="margin-bottom: 0; min-width: 220px;">
-                  Account Status
-                  <select id="admin-account-status-filter">
-                    <option value="active" selected>Active</option>
-                    <option value="deactivated">Deactivated</option>
-                    <option value="all">All</option>
-                  </select>
+                  Filter by Department
+                  <div class="combobox" id="admin-department-combobox">
+                    <input type="text" class="combobox-search" placeholder="Department" autocomplete="off" />
+                    <button type="button" class="combobox-clear" aria-label="Clear" tabindex="-1">×</button>
+                    <span class="combobox-caret" aria-hidden="true">▾</span>
+                    <div class="combobox-panel" role="listbox"></div>
+                    <input type="hidden" id="admin-department-filter" value="" />
+                  </div>
                 </label>
+
+                <div style="display:flex; align-items:center; flex: 0 0 auto;">
+                  <select id="admin-account-status-filter" class="filter-chip-select" aria-label="Account status filter">
+                    <option value="active" selected>Status: Active</option>
+                    <option value="deactivated">Status: Deactivated</option>
+                    <option value="all">Status: All</option>
+                  </select>
+                </div>
               </div>
 
               <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center; margin-top:0.75rem;">
@@ -284,8 +396,11 @@
                 </label>
                 <label>
                   Password
-                  <input type="password" name="password" placeholder="Set a temporary password" required />
-                  <small class="muted" style="display:block; margin-top:0.3rem; font-size:0.8rem;">
+                  <div class="password-field">
+                    <input type="password" name="password" placeholder="Set a temporary password" required />
+                    <button type="button" class="password-toggle" aria-label="Show password"></button>
+                  </div>
+                  <small class="muted" style="display:block; margin-top:0.3rem; font-size:0.8rem; font-weight:400;">
                     Min 8 chars; include an uppercase letter, a number, and a special character.
                   </small>
                 </label>
@@ -701,6 +816,8 @@
       </div>
     </div>
 
+    <script src="/js/xu-departments.js"></script>
+    <script src="/js/xu-roles.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="/js/admin.js"></script>
   </body>

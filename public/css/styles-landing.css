@@ -97,6 +97,9 @@ a { color: var(--xu-blue); }
 .nav-link:hover { color: #fff; }
 .nav-link:hover::after { width: 100%; left: 0; }
 
+.nav-link.is-active { color: #fff; }
+.nav-link.is-active::after { width: 100%; left: 0; }
+
 .nav-link-cta {
   border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 999px;
@@ -627,6 +630,84 @@ input {
 .container { max-width: 1220px; margin: 0 auto; padding: 1.5rem 1rem 2.5rem; }
 
 /* ---------- Responsive ---------- */
+/* ---------- Purpose section (Mission & Vision) ---------- */
+.purpose {
+  position: relative;
+  padding: 7rem 2rem;
+  background: #ffffff;
+  color: var(--xu-blue-deep, #16264f);
+  overflow: hidden;
+}
+.purpose-inner {
+  position: relative;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+.purpose-eyebrow {
+  display: inline-block;
+  font-family: var(--sans);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--xu-blue);
+  margin-bottom: 1.2rem;
+}
+.purpose-heading {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: clamp(2rem, 4.5vw, 3.2rem);
+  color: var(--xu-blue-deep, #16264f);
+  margin: 0 0 3rem;
+  letter-spacing: -0.005em;
+}
+.purpose-heading em {
+  font-style: italic;
+  color: var(--xu-blue);
+}
+.purpose-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+.purpose-block {
+  position: relative;
+  background: #fff;
+  border: 1px solid rgba(32, 58, 115, 0.12);
+  border-radius: 1rem;
+  padding: 2.4rem 2rem;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.purpose-block:hover {
+  transform: translateY(-4px);
+  border-color: rgba(32, 58, 115, 0.3);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
+}
+.purpose-label {
+  display: block;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--xu-gold, #b8860b);
+  margin-bottom: 1rem;
+}
+.purpose-block h3 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 1.9rem;
+  color: var(--xu-blue-deep, #16264f);
+  margin: 0 0 1rem;
+}
+.purpose-block p {
+  font-family: var(--serif);
+  font-size: 1.08rem;
+  line-height: 1.7;
+  color: #374151;
+  margin: 0;
+}
+
 @media (max-width: 980px) {
   .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 2.5rem; }
   .hero-landing { padding: 7rem 1.4rem 4rem; }
@@ -636,6 +717,8 @@ input {
   .scroll-cue { display: none; }
   .story { padding: 4.5rem 1.4rem; }
   .access { padding: 4rem 1.4rem 5rem; }
+  .purpose { padding: 4.5rem 1.4rem; }
+  .purpose-grid { gap: 2.4rem; }
 }
 
 @media (max-width: 560px) {

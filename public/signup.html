@@ -9,6 +9,32 @@
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap"></noscript>
     <link rel="stylesheet" href="/css/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      .signup-step2 { position: relative; transition: opacity 0.25s ease, filter 0.25s ease; }
+      .signup-step2.is-locked {
+        opacity: 0.45;
+        filter: grayscale(0.55);
+        pointer-events: none;
+        user-select: none;
+      }
+      .signup-step2.is-locked .signup-step2-lock-badge { pointer-events: auto; }
+      .signup-step2-lock-badge {
+        display: none;
+        align-items: center;
+        gap: 0.45rem;
+        background: rgba(32, 58, 115, 0.08);
+        border: 1px solid rgba(32, 58, 115, 0.22);
+        color: var(--xu-blue, #203a73);
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 0.3rem 0.7rem;
+        border-radius: 999px;
+        margin-left: 0.6rem;
+        vertical-align: middle;
+      }
+      .signup-step2.is-locked .signup-step2-lock-badge { display: inline-flex; }
+    </style>
   </head>
   <body class="has-hero-bg">
     <header class="topbar" id="topbar">
@@ -16,21 +42,17 @@
         <a class="brand" href="/" aria-label="Go to GIMS home">
           <div class="brand-badge">XU</div>
           <div class="brand-title">
-            <strong>GIMS</strong>
-            <span>Gender and Development MIS</span>
+            <div class="wordmark" aria-label="Xavier University Ateneo de Cagayan">
+              <div class="wordmark-xu">XAVIER UNIVERSITY</div>
+              <div class="wordmark-ateneo">Ateneo de Cagayan</div>
+            </div>
           </div>
         </a>
         <div class="topbar-actions">
-          <a class="btn secondary" href="/">Already have an account? Login</a>
+          <a class="btn secondary" href="/" style="font-size:0.82rem; padding:0.4rem 0.85rem;">Already have an account? Login</a>
         </div>
       </div>
     </header>
-
-    <nav class="navbar" id="navbar" aria-label="Primary navigation">
-      <div class="navbar-inner">
-        <span class="nav-section-label">Create GIMS account</span>
-      </div>
-    </nav>
 
     <section class="hero hero-magis">
       <div class="hero-overlay"></div>
@@ -61,10 +83,7 @@
               required
             />
           </label>
-          <div class="row">
-            <button class="btn secondary" id="signup-send-pin-btn" type="button">
-              Send PIN
-            </button>
+          <div class="row" style="align-items: end;">
             <label>
               6 digit PIN
               <input
@@ -77,6 +96,9 @@
                 disabled
               />
             </label>
+            <button class="btn secondary" id="signup-send-pin-btn" type="button" style="margin-bottom:0.75rem;">
+              Send PIN
+            </button>
           </div>
           <div class="row">
             <button class="btn" id="signup-verify-pin-btn" type="button">Verify PIN</button>
@@ -85,66 +107,75 @@
           <p class="status" id="signup-email-status"></p>
           <p class="status" id="signup-pin-status"></p>
 
-          <h2 style="margin-top: 1.5rem">Step 2: Complete your profile</h2>
-          <p class="muted small">
-            After your email is verified, fill in your employee details. All fields marked * are required.
-          </p>
+          <div class="signup-step2 is-locked" id="signup-step2">
+            <h2 style="margin-top: 1.5rem">
+              Step 2: Complete your profile
+              <span class="signup-step2-lock-badge" aria-live="polite">🔒 Verify your email first</span>
+            </h2>
+            <p class="muted small">
+              After your email is verified, fill in your employee details. All fields marked * are required.
+            </p>
 
-          <div class="row">
+            <div class="row">
+              <label>
+                First Name *
+                <input type="text" id="signup-first-name" name="firstName" required />
+              </label>
+              <label>
+                Last Name *
+                <input type="text" id="signup-last-name" name="lastName" required />
+              </label>
+            </div>
             <label>
-              First Name *
-              <input type="text" id="signup-first-name" name="firstName" required />
+              Department *
+              <input type="text" id="signup-department" name="department" list="signup-department-list" autocomplete="off" placeholder="Type to search departments…" required />
+              <datalist id="signup-department-list"></datalist>
             </label>
             <label>
-              Last Name *
-              <input type="text" id="signup-last-name" name="lastName" required />
-            </label>
-          </div>
-          <label>
-            Department *
-            <input type="text" id="signup-department" name="department" required />
-          </label>
-          <label>
-            Position / Workforce Role *
-            <input type="text" id="signup-position" name="position" required />
-          </label>
-          <label>
-            Password *
-            <input
-              type="password"
-              id="signup-password"
-              name="password"
-              autocomplete="new-password"
-              required
-            />
-            <small class="muted" style="display:block; margin-top:0.3rem; font-size:0.8rem;">
-              Must be at least 8 characters and include an uppercase letter, a number, and a special character.
-            </small>
-          </label>
-          <div class="row">
-            <label>
-              Assigned Birth Sex *
-              <input type="text" id="signup-birth-sex" name="birthSex" required placeholder="Male or Female" />
+              Position / Workforce Role *
+              <input type="text" id="signup-position" name="position" list="signup-position-list" autocomplete="off" placeholder="Type to search roles…" required />
+              <datalist id="signup-position-list"></datalist>
             </label>
             <label>
-              Gender Identity (optional)
-              <input type="text" id="signup-gender-identity" name="genderIdentity" />
+              Password *
+              <input
+                type="password"
+                id="signup-password"
+                name="password"
+                autocomplete="new-password"
+                required
+              />
+              <small class="muted" style="display:block; margin-top:0.3rem; font-size:0.8rem; font-weight:400;">
+                Must be at least 8 characters and include an uppercase letter, a number, and a special character.
+              </small>
             </label>
-          </div>
+            <div class="row">
+              <label>
+                Assigned Birth Sex *
+                <input type="text" id="signup-birth-sex" name="birthSex" required placeholder="Male or Female" />
+              </label>
+              <label>
+                Gender Identity (optional)
+                <input type="text" id="signup-gender-identity" name="genderIdentity" />
+              </label>
+            </div>
 
-          <div class="row">
-            <button class="btn" id="signup-submit-btn" type="button">
-              Create Account
-            </button>
-            <button class="btn secondary" id="signup-cancel-btn" type="button">
-              Clear form
-            </button>
+            <div class="row">
+              <button class="btn" id="signup-submit-btn" type="button">
+                Create Account
+              </button>
+              <button class="btn secondary" id="signup-cancel-btn" type="button">
+                Clear form
+              </button>
+            </div>
           </div>
           <p class="status" id="signup-complete-status"></p>
         </form>
       </section>
     </main>
 
+    <script src="/js/xu-departments.js"></script>
+    <script src="/js/xu-roles.js"></script>
     <script src="/js/signup.js"></script>
   </body>
 </html>
