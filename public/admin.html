@@ -307,6 +307,12 @@
                   Select
                 </label>
                 <button class="btn" id="admin-notify-btn" type="button">Email / Notify</button>
+                <label style="margin-bottom: 0;">
+                  <select id="admin-export-format" class="filter-chip-select" aria-label="Export format" style="margin-right: 0.4rem;">
+                    <option value="pdf">Format: PDF (CHED)</option>
+                    <option value="csv">Format: CSV</option>
+                  </select>
+                </label>
                 <button class="btn secondary" id="admin-export-btn" type="button">Export Report</button>
               </div>
 
@@ -357,6 +363,14 @@
                 </select>
               </label>
               <button class="btn secondary" id="admin-seminars-clear-filters" type="button">Clear Filters</button>
+              <div id="admin-seminars-view-sort" style="display:flex; align-items:center; gap:0.35rem;">
+                <div role="group" aria-label="View mode" style="display:inline-flex; border:1px solid var(--border); border-radius:0.5rem; overflow:hidden;">
+                  <button class="btn secondary is-active" id="admin-seminars-view-swipe" type="button" style="border-radius:0; border:none; padding:0.35rem 0.6rem; font-size:0.78rem;">Swipe</button>
+                  <button class="btn secondary" id="admin-seminars-view-grid" type="button" style="border-radius:0; border:none; padding:0.35rem 0.6rem; font-size:0.78rem;">Grid</button>
+                  <button class="btn secondary" id="admin-seminars-view-list" type="button" style="border-radius:0; border:none; padding:0.35rem 0.6rem; font-size:0.78rem;">List</button>
+                </div>
+                <button class="btn secondary" id="admin-seminars-sort-btn" type="button" aria-haspopup="menu" style="padding:0.35rem 0.6rem; font-size:0.78rem;">Sort ▾</button>
+              </div>
             </div>
 
             <div style="position: relative; margin-top: 1rem;">
