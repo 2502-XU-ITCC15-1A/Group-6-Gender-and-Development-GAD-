@@ -1528,6 +1528,7 @@ textarea {
 .dashboard-main {
   flex: 1;
   min-width: 0;
+  min-height: calc(100vh - 140px);
 }
 
 .page-header {

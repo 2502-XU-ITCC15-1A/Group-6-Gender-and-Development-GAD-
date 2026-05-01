@@ -1,4 +1,18 @@
+const _EYE = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const _EYE_OFF = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
 document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.password-toggle').forEach(btn => {
+    btn.innerHTML = _EYE;
+    btn.addEventListener('click', () => {
+      const input = btn.closest('.password-field').querySelector('input');
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.innerHTML = showing ? _EYE : _EYE_OFF;
+      btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    });
+  });
+
   let adminToken = window.localStorage.getItem('gims_employee_token') || null;
 
   const decodeJwtPayload = (jwtToken) => {
@@ -83,6 +97,152 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectModeEl = document.getElementById('admin-select-mode');
   const employeeSearchEl = document.getElementById('admin-employee-search');
   const departmentFilterEl = document.getElementById('admin-department-filter');
+  const clusterFilterEl = document.getElementById('admin-cluster-filter');
+
+  const setupCombobox = (rootId, { onChange }) => {
+    const root = document.getElementById(rootId);
+    if (!root) return null;
+    const search = root.querySelector('.combobox-search');
+    const panel = root.querySelector('.combobox-panel');
+    const clearBtn = root.querySelector('.combobox-clear');
+    const hidden = root.querySelector('input[type="hidden"]');
+    let options = [];
+    let activeIndex = -1;
+
+    const close = () => {
+      root.classList.remove('is-open');
+      activeIndex = -1;
+    };
+    const open = () => {
+      root.classList.add('is-open');
+      render();
+    };
+    const render = () => {
+      const q = search.value.trim().toLowerCase();
+      const filtered = q
+        ? options.filter((o) => o.label.toLowerCase().includes(q))
+        : options;
+      if (!filtered.length) {
+        panel.innerHTML = '<div class="combobox-empty">No matches</div>';
+        return;
+      }
+      panel.innerHTML = filtered
+        .map((o, i) => {
+          const sel = o.value === hidden.value ? ' is-selected' : '';
+          const act = i === activeIndex ? ' is-active' : '';
+          return `<div class="combobox-option${sel}${act}" role="option" data-value="${o.value.replace(/"/g, '&quot;')}">${o.label.replace(/</g, '&lt;')}</div>`;
+        })
+        .join('');
+      panel.querySelectorAll('.combobox-option').forEach((el) => {
+        el.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          select(el.getAttribute('data-value') || '');
+        });
+      });
+    };
+    const select = (value) => {
+      hidden.value = value;
+      const match = options.find((o) => o.value === value);
+      search.value = match ? match.label : '';
+      root.classList.toggle('has-value', Boolean(value));
+      close();
+      onChange?.(value);
+    };
+
+    search.addEventListener('focus', () => {
+      search.value = '';
+      activeIndex = -1;
+      open();
+    });
+    search.addEventListener('input', () => {
+      activeIndex = -1;
+      open();
+    });
+    search.addEventListener('keydown', (e) => {
+      const visible = panel.querySelectorAll('.combobox-option');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!root.classList.contains('is-open')) open();
+        activeIndex = Math.min(activeIndex + 1, visible.length - 1);
+        render();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex = Math.max(activeIndex - 1, 0);
+        render();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const target = visible[activeIndex] || visible[0];
+        if (target) select(target.getAttribute('data-value') || '');
+      } else if (e.key === 'Escape') {
+        close();
+      }
+    });
+    search.addEventListener('blur', () => {
+      window.setTimeout(() => {
+        if (!root.contains(document.activeElement)) close();
+        const match = options.find((o) => o.value === hidden.value);
+        if (match) search.value = match.label;
+        else if (!hidden.value) search.value = '';
+      }, 120);
+    });
+    clearBtn?.addEventListener('click', () => {
+      select('');
+      search.focus();
+    });
+    document.addEventListener('click', (e) => {
+      if (!root.contains(e.target)) close();
+    });
+
+    return {
+      setOptions(next) {
+        options = next.slice();
+        const current = hidden.value;
+        if (current && !options.some((o) => o.value === current)) {
+          select('');
+        } else {
+          const match = options.find((o) => o.value === current);
+          if (match && document.activeElement !== search) search.value = match.label;
+        }
+        if (root.classList.contains('is-open')) render();
+      },
+      get value() { return hidden.value; },
+      set value(v) { select(v); },
+    };
+  };
+
+  const buildOptions = (values, allLabel) =>
+    [{ value: '', label: allLabel }].concat(
+      values.map((v) => ({ value: v, label: v }))
+    );
+
+  const clusterCombo = setupCombobox('admin-cluster-combobox', {
+    onChange: async () => {
+      populateDepartmentFilter();
+      await loadDepartmentsAndEmployees();
+    },
+  });
+  const departmentCombo = setupCombobox('admin-department-combobox', {
+    onChange: async () => {
+      await loadDepartmentsAndEmployees();
+    },
+  });
+
+  const populateClusterFilter = () => {
+    if (!clusterCombo || !Array.isArray(window.XU_CLUSTERS)) return;
+    clusterCombo.setOptions(buildOptions(window.XU_CLUSTERS, 'All clusters'));
+  };
+
+  const populateDepartmentFilter = (extraDepartments = []) => {
+    if (!departmentCombo || !window.XU_DEPARTMENTS) return;
+    const cluster = clusterFilterEl?.value || '';
+    const baseList = cluster ? (window.XU_DEPARTMENTS[cluster] || []) : window.XU_ALL_DEPARTMENTS;
+    const extras = extraDepartments.filter(
+      (d) => d && !baseList.includes(d) && (!cluster || window.XU_DEPARTMENT_TO_CLUSTER[d] === cluster)
+    );
+    const merged = [...baseList, ...extras].sort((a, b) => a.localeCompare(b));
+    departmentCombo.setOptions(buildOptions(merged, 'All departments'));
+  };
+
   const accountStatusFilterEl = document.getElementById('admin-account-status-filter');
   const notifyBtn = document.getElementById('admin-notify-btn');
   const exportBtn = document.getElementById('admin-export-btn');
@@ -1639,8 +1799,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadDepartmentsAndEmployees = async () => {
     employeesStatusEl.textContent = '';
     employeesTableEl.innerHTML = '';
+    populateClusterFilter();
+    populateDepartmentFilter();
     try {
       const name = String(employeeSearchEl?.value || '').trim();
+      const cluster = clusterFilterEl?.value || '';
       const department = departmentFilterEl?.value || '';
       const accountStatus = accountStatusFilterEl?.value || 'active';
       const params = new URLSearchParams();
@@ -1653,18 +1816,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Failed to load employees');
 
-      if (Array.isArray(data.departments) && departmentFilterEl) {
-        const current = departmentFilterEl.value;
-        const options = data.departments
-          .map((dept) => `<option value="${escapeHtml(dept)}">${escapeHtml(dept)}</option>`)
-          .join('');
-        departmentFilterEl.innerHTML = `<option value="">All</option>${options}`;
-        if (data.departments.includes(current)) {
-          departmentFilterEl.value = current;
-        }
+      if (Array.isArray(data.departments)) {
+        populateDepartmentFilter(data.departments);
       }
 
-      renderEmployeesTable(data.rows);
+      let rows = Array.isArray(data.rows) ? data.rows : [];
+      if (cluster && !department) {
+        const clusterDepts = window.XU_DEPARTMENTS?.[cluster] || [];
+        rows = rows.filter((r) => clusterDepts.includes(r.department));
+      }
+      renderEmployeesTable(rows);
     } catch (err) {
       employeesStatusEl.textContent = err.message || 'Failed to load employees.';
       if (String(err.message || '').toLowerCase().includes('invalid token')) {
@@ -1709,11 +1870,47 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  let navScrollSpyLockedUntil = 0;
   sidebarNavButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
+      navScrollSpyLockedUntil = Date.now() + 800;
       showNavModule(btn.getAttribute('data-nav'));
     });
   });
+
+  const setActiveNav = (key) => {
+    sidebarNavButtons.forEach((btn) => {
+      const btnKey = String(btn.getAttribute('data-nav') || '').toLowerCase();
+      btn.classList.toggle('is-active', btnKey === key);
+    });
+    if (moduleHintEl) {
+      const hintMap = {
+        dashboard: 'Current View: Overview',
+        seminars: 'Current View: Manage Seminars',
+        'create-admin': 'Current View: Admin Accounts',
+        employees: 'Current View: Employee Records',
+      };
+      moduleHintEl.textContent = hintMap[key] || 'Current View: Overview';
+    }
+  };
+
+  const updateOverviewSpy = () => {
+    if (Date.now() < navScrollSpyLockedUntil) return;
+    if (!dashboardWrapperEl) return;
+    if (dashboardWrapperEl.style.display === 'none') return;
+    const employeesCard = document.getElementById('admin-employees-card');
+    if (!employeesCard) return;
+    const probe = window.innerHeight * 0.3;
+    const rect = employeesCard.getBoundingClientRect();
+    const nearBottom =
+      window.innerHeight + window.scrollY >=
+      document.documentElement.scrollHeight - 8;
+    const inEmployees = rect.top <= probe || nearBottom;
+    setActiveNav(inEmployees ? 'employees' : 'dashboard');
+  };
+
+  window.addEventListener('scroll', updateOverviewSpy, { passive: true });
+  window.addEventListener('resize', updateOverviewSpy, { passive: true });
 
   seminarsPrevBtn?.addEventListener('click', () => {
     if (!seminarsCarouselEl) return;
@@ -2057,10 +2254,6 @@ document.addEventListener('DOMContentLoaded', () => {
     await loadDepartmentsAndEmployees();
   });
 
-  departmentFilterEl?.addEventListener('change', async () => {
-    await loadDepartmentsAndEmployees();
-  });
-
   employeeSearchEl?.addEventListener('input', () => {
     if (employeeSearchDebounceId) {
       window.clearTimeout(employeeSearchDebounceId);
@@ -2070,7 +2263,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 220);
   });
 
+  const syncAccountStatusChip = () => {
+    if (!accountStatusFilterEl) return;
+    accountStatusFilterEl.classList.toggle(
+      'is-active',
+      (accountStatusFilterEl.value || 'active') !== 'active'
+    );
+  };
+  syncAccountStatusChip();
   accountStatusFilterEl?.addEventListener('change', async () => {
+    syncAccountStatusChip();
     await loadDepartmentsAndEmployees();
   });
 
