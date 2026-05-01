@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { validatePasswordPolicy } from '../config/passwordPolicy.js';
 
 const UserSchema = new mongoose.Schema(
   {
@@ -12,6 +13,12 @@ const UserSchema = new mongoose.Schema(
 );
 
 UserSchema.methods.setPassword = async function setPassword(password) {
+  const policyError = validatePasswordPolicy(password);
+  if (policyError) {
+    const err = new Error(policyError);
+    err.status = 400;
+    throw err;
+  }
   const salt = await bcrypt.genSalt(10);
   this.passwordHash = await bcrypt.hash(password, salt);
 };

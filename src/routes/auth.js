@@ -38,11 +38,20 @@ router.post('/send-pin', async (req, res, next) => {
         .json({ message: 'Only @xu.edu.ph or @my.xu.edu.ph emails are allowed.' });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const existingUser = await User.findOne({ username: normalizedEmail });
+    if (existingUser) {
+      return res
+        .status(409)
+        .json({ message: 'This email is already registered. Please sign in instead or use “Forgot password?”.' });
+    }
+
     const code = generatePin();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
     await PinVerification.create({
-      email: email.toLowerCase().trim(),
+      email: normalizedEmail,
       code,
       expiresAt,
     });
