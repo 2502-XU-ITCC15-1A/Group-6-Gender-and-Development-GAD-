@@ -154,14 +154,18 @@ export const generateCHEDReport = async (data) => {
 
   const institutionName = escapeHtml(process.env.REPORT_INSTITUTION_NAME || 'Xavier University');
   const generatedDate = new Date();
-  const generatedDateDisplay = `${generatedDate.getMonth() + 1}-${generatedDate.getDate()}-${generatedDate.getFullYear()}`;
+  const generatedDateDisplay = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(generatedDate);
   const totalEmployees = Number(data?.totalEmployees || (Array.isArray(data?.employees) ? data.employees.length : 0));
   const totalCompliant = Number(data?.totalCompliant || 0);
   const totalNonCompliant = Number(data?.totalNonCompliant || 0);
   const complianceRatePercent = Number(data?.complianceRatePercent || 0);
   const summaryText = totalEmployees
-    ? `This report summarizes GAD seminar compliance for ${totalEmployees} active employees. ${totalCompliant} employees are compliant while ${totalNonCompliant} remain non-compliant, resulting in an overall compliance rate of ${complianceRatePercent.toFixed(1)}%.`
-    : 'No active employee data is currently available for this reporting period.';
+    ? `This report provides an overview of employee compliance with mandated Gender and Development (GAD) seminar participation. Based on current records, ${totalEmployees} employees are actively monitored, of which only ${totalCompliant} have achieved compliance while ${totalNonCompliant} remain non-compliant. This corresponds to an overall compliance rate of ${complianceRatePercent.toFixed(1)}%.`
+    : 'This report provides an overview of employee compliance with mandated Gender and Development (GAD) seminar participation. Based on current records, 0 employees are actively monitored, of which only 0 have achieved compliance while 0 remain non-compliant. This corresponds to an overall compliance rate of 0.0%.';
   const topDepartment = Array.isArray(data?.departmentCompliance) && data.departmentCompliance.length
     ? data.departmentCompliance[0]
     : null;
@@ -220,7 +224,7 @@ export const generateCHEDReport = async (data) => {
           <h2>${institutionName}</h2>
           <h3>Gender and Development (GAD) Office</h3>
           <p>Annual Employee Compliance Report for CHED</p>
-          <p class="generated-date">(Date generated ${generatedDateDisplay})</p>
+          <p class="generated-date">${generatedDateDisplay}</p>
         </div>
 
         <p class="section-title">Summary Text</p>
