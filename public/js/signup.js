@@ -27,6 +27,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const firstNameInput = document.getElementById('signup-first-name');
   const lastNameInput = document.getElementById('signup-last-name');
   const departmentInput = document.getElementById('signup-department');
+  const departmentList = document.getElementById('signup-department-list');
+  if (departmentList && Array.isArray(window.XU_ALL_DEPARTMENTS)) {
+    window.XU_CLUSTERS.forEach((cluster) => {
+      window.XU_DEPARTMENTS[cluster].forEach((dept) => {
+        const opt = document.createElement('option');
+        opt.value = dept;
+        opt.label = `${dept} — ${cluster}`;
+        departmentList.appendChild(opt);
+      });
+    });
+  }
+  const positionList = document.getElementById('signup-position-list');
+  if (positionList && Array.isArray(window.XU_ALL_ROLES)) {
+    window.XU_ROLE_CATEGORIES.forEach((cat) => {
+      window.XU_ROLES[cat].forEach((role) => {
+        const opt = document.createElement('option');
+        opt.value = role;
+        opt.label = `${role} — ${cat}`;
+        positionList.appendChild(opt);
+      });
+    });
+  }
   const positionInput = document.getElementById('signup-position');
   const passwordInput = document.getElementById('signup-password');
   const birthSexInput = document.getElementById('signup-birth-sex');
@@ -50,10 +72,14 @@ document.addEventListener('DOMContentLoaded', () => {
     submitBtn,
   ].filter(Boolean);
 
+  const step2Container = document.getElementById('signup-step2');
   const setProfileEnabled = (enabled) => {
     profileInputs.forEach((node) => {
       node.disabled = !enabled;
     });
+    if (step2Container) {
+      step2Container.classList.toggle('is-locked', !enabled);
+    }
   };
 
   const isValidXUEmail = (value) => {
@@ -166,6 +192,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!payload.firstName || !payload.lastName || !payload.department || !payload.position || !payload.birthSex || !payload.password) {
       completeStatusEl.textContent =
         'First Name, Last Name, Department, Position, Birth Sex, and Password are required.';
+      return;
+    }
+
+    const pw = payload.password;
+    if (pw.length < 8 || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw) || !/[^A-Za-z0-9]/.test(pw)) {
+      completeStatusEl.textContent =
+        'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.';
       return;
     }
 

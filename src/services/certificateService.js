@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer';
+import { sendCertificateEmail } from './emailService.js';
 
 const escapeHtml = (value) => {
   return String(value || '')
@@ -256,5 +257,40 @@ export const issueCertificateForRegistration = async ({
     });
   }
 
+  if (employee.email) {
+    queueCertificateEmail({ employee, seminar, registration });
+  }
+
   return registration;
+};
+
+const queueCertificateEmail = ({ employee, seminar, registration }) => {
+  setImmediate(async () => {
+    try {
+      const { html, certificateCode, fileNameSafe } = buildCertificateDownload({
+        employee,
+        registration,
+        seminar,
+      });
+      const buffer = await renderCertificateBuffer({ html });
+      await sendCertificateEmail({
+        employee,
+        seminar,
+        certificateCode,
+        attachment: {
+          filename: `${fileNameSafe || 'certificate'}.png`,
+          content: buffer,
+          contentType: 'image/png',
+        },
+      });
+      console.log(
+        `Certificate emailed to ${employee.email} for "${seminar.title}".`
+      );
+    } catch (err) {
+      console.error(
+        `Certificate email failed for ${employee.email} (seminar ${seminar._id}):`,
+        err.message
+      );
+    }
+  });
 };

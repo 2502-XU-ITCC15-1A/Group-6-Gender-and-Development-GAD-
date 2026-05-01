@@ -237,6 +237,52 @@ export const sendTemporaryPasswordEmail = async (email, tempPassword) => {
   });
 };
 
+export const sendCertificateEmail = async ({
+  employee,
+  seminar,
+  certificateCode,
+  attachment,
+}) => {
+  if (!employee?.email) throw new Error('Employee has no email address.');
+
+  const seminarTitle = seminar?.title || 'GAD Seminar';
+  const dateStr = seminar?.date
+    ? new Date(seminar.date).toLocaleDateString()
+    : '';
+
+  const html = buildEmail({
+    preheader: `Your certificate for "${seminarTitle}" is now available.`,
+    heading: 'Your certificate has been released',
+    intro: `Congratulations, ${employee.name || 'colleague'}. Your certificate of attendance for the seminar "<strong>${seminarTitle}</strong>" has been released and is attached to this email.`,
+    highlight: {
+      label: 'Certificate code',
+      value: certificateCode || '—',
+      caption: dateStr ? `Seminar held on ${dateStr}.` : '',
+    },
+    body: `<p style="margin: 0 0 12px;">You may also download your certificate any time from the <strong>Attended Seminars</strong> section of your GIMS dashboard.</p>
+      <p style="margin: 0; color:${COLORS.muted}; font-size: 14px;">Thank you for your continued participation in Xavier University's GAD initiatives.</p>`,
+  });
+
+  const attachments = attachment
+    ? [
+        {
+          filename: attachment.filename || `${seminarTitle}-certificate.png`.replace(/[^a-zA-Z0-9.-]+/g, '-'),
+          content: attachment.content,
+          contentType: attachment.contentType || 'image/png',
+        },
+      ]
+    : [];
+
+  await sendMailWithRetry({
+    from: `"GIMS" <${process.env.GMAIL_USER}>`,
+    to: employee.email,
+    subject: `Your GIMS certificate: ${seminarTitle}`,
+    text: `Hello ${employee.name || 'colleague'},\n\nYour certificate of attendance for "${seminarTitle}" has been released.\n\nCertificate code: ${certificateCode || '—'}\n\nThe certificate is attached to this email and is also available in the Attended Seminars section of your GIMS dashboard.\n\n— Xavier University GAD Office`,
+    html,
+    attachments,
+  });
+};
+
 export const sendReminderEmail = async (employee, remainingCount) => {
   const noun = remainingCount === 1 ? 'seminar' : 'seminars';
   const html = buildEmail({
