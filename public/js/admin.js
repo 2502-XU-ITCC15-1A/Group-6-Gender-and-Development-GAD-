@@ -57,6 +57,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const seminarsMonthFilterEl = document.getElementById('admin-seminars-month-filter');
   const seminarsYearFilterEl = document.getElementById('admin-seminars-year-filter');
   const seminarsClearFiltersBtn = document.getElementById('admin-seminars-clear-filters');
+  const seminarsViewSortWrapEl = document.getElementById('admin-seminars-view-sort');
+  const seminarsViewSwipeBtn = document.getElementById('admin-seminars-view-swipe');
+  const seminarsViewGridBtn = document.getElementById('admin-seminars-view-grid');
+  const seminarsViewListBtn = document.getElementById('admin-seminars-view-list');
+  const seminarsSortBtn = document.getElementById('admin-seminars-sort-btn');
   const toggleDeletedSeminarsBtn = document.getElementById('admin-toggle-deleted-seminars-btn');
   const deletedSeminarsModalEl = document.getElementById('admin-deleted-seminars-modal');
   const deletedSeminarsCloseBtn = document.getElementById('admin-deleted-seminars-close');
@@ -280,6 +285,10 @@ document.addEventListener('DOMContentLoaded', () => {
     month: '',
     year: '',
   };
+  let seminarViewMode = 'swipe';
+  let seminarSortMode = 'date-asc';
+  let seminarsSortMenuEl = null;
+  let seminarsSortMenuCloseHandler = null;
   let deletedSeminars = [];
   let isDeletedSeminarsModalOpen = false;
   let accountStatusMenuEl = null;
@@ -343,6 +352,165 @@ document.addEventListener('DOMContentLoaded', () => {
       if (dateDiff !== 0) return dateDiff;
       return parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime);
     });
+  };
+
+  const getSeminarCreatedMs = (seminar) => {
+    const createdAtMs = new Date(seminar?.createdAt || seminar?.created_at || 0).getTime();
+    if (!Number.isNaN(createdAtMs) && createdAtMs > 0) return createdAtMs;
+
+    const id = String(seminar?._id || '');
+    // Mongo ObjectId's first 8 hex chars represent timestamp seconds.
+    if (/^[a-fA-F0-9]{24}$/.test(id)) {
+      return Number.parseInt(id.slice(0, 8), 16) * 1000;
+    }
+    return 0;
+  };
+
+  const sortSeminarsByMode = (seminars, mode) => {
+    const list = Array.isArray(seminars) ? [...seminars] : [];
+    const normalized = String(mode || 'date-asc').toLowerCase();
+    if (normalized === 'recently-added') {
+      return list.sort((a, b) => getSeminarCreatedMs(b) - getSeminarCreatedMs(a));
+    }
+    if (normalized === 'date-desc') return sortSeminarsNearestToFarthest(list).reverse();
+    if (normalized === 'name-asc') {
+      return list.sort((a, b) => String(a?.title || '').localeCompare(String(b?.title || ''), undefined, { sensitivity: 'base' }));
+    }
+    if (normalized === 'name-desc') {
+      return list
+        .sort((a, b) => String(a?.title || '').localeCompare(String(b?.title || ''), undefined, { sensitivity: 'base' }))
+        .reverse();
+    }
+    return sortSeminarsNearestToFarthest(list);
+  };
+
+  const applySeminarsViewMode = () => {
+    if (seminarsViewSwipeBtn) seminarsViewSwipeBtn.classList.toggle('is-active', seminarViewMode === 'swipe');
+    if (seminarsViewGridBtn) seminarsViewGridBtn.classList.toggle('is-active', seminarViewMode === 'grid');
+    if (seminarsViewListBtn) seminarsViewListBtn.classList.toggle('is-active', seminarViewMode === 'list');
+
+    if (!seminarsCarouselEl) return;
+    const cards = Array.from(seminarsCarouselEl.querySelectorAll('article.card'));
+
+    if (seminarViewMode === 'swipe') {
+      seminarsCarouselEl.style.display = 'flex';
+      seminarsCarouselEl.style.flexDirection = 'row';
+      seminarsCarouselEl.style.gap = '1rem';
+      seminarsCarouselEl.style.overflowX = 'auto';
+      seminarsCarouselEl.style.scrollBehavior = 'smooth';
+      seminarsCarouselEl.style.padding = '0.4rem 2.3rem';
+      seminarsCarouselEl.style.gridTemplateColumns = '';
+      cards.forEach((card) => {
+        card.style.minWidth = '320px';
+        card.style.flex = '0 0 320px';
+      });
+      if (seminarsPrevBtn) seminarsPrevBtn.style.display = '';
+      if (seminarsNextBtn) seminarsNextBtn.style.display = '';
+      return;
+    }
+
+    if (seminarViewMode === 'list') {
+      seminarsCarouselEl.style.display = 'flex';
+      seminarsCarouselEl.style.flexDirection = 'column';
+      seminarsCarouselEl.style.gap = '0.75rem';
+      seminarsCarouselEl.style.overflowX = 'visible';
+      seminarsCarouselEl.style.padding = '0';
+      seminarsCarouselEl.style.scrollBehavior = 'auto';
+      seminarsCarouselEl.style.gridTemplateColumns = '';
+      cards.forEach((card) => {
+        card.style.minWidth = 'auto';
+        card.style.flex = '1 1 auto';
+      });
+    } else {
+      seminarsCarouselEl.style.display = 'grid';
+      seminarsCarouselEl.style.gridTemplateColumns = 'repeat(auto-fit, minmax(320px, 1fr))';
+      seminarsCarouselEl.style.gap = '1rem';
+      seminarsCarouselEl.style.overflowX = 'visible';
+      seminarsCarouselEl.style.padding = '0';
+      seminarsCarouselEl.style.scrollBehavior = 'auto';
+      cards.forEach((card) => {
+        card.style.minWidth = 'auto';
+        card.style.flex = '1 1 auto';
+      });
+    }
+
+    if (seminarsPrevBtn) seminarsPrevBtn.style.display = 'none';
+    if (seminarsNextBtn) seminarsNextBtn.style.display = 'none';
+  };
+
+  const closeSeminarsSortMenu = () => {
+    if (seminarsSortMenuEl) seminarsSortMenuEl.remove();
+    seminarsSortMenuEl = null;
+    if (seminarsSortMenuCloseHandler) {
+      window.removeEventListener('pointerdown', seminarsSortMenuCloseHandler, true);
+      seminarsSortMenuCloseHandler = null;
+    }
+  };
+
+  const openSeminarsSortMenu = (event) => {
+    if (!seminarsSortBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeSeminarsSortMenu();
+
+    const menu = document.createElement('div');
+    menu.style.position = 'fixed';
+    menu.style.zIndex = '1400';
+    menu.style.background = '#fff';
+    menu.style.border = '1px solid var(--border)';
+    menu.style.borderRadius = '0.55rem';
+    menu.style.boxShadow = '0 10px 30px rgba(15,23,42,0.16)';
+    menu.style.padding = '0.35rem';
+    menu.style.minWidth = '240px';
+
+    const options = [
+      { id: 'recently-added', label: 'Sort: Recently added' },
+      { id: 'date-asc', label: 'Sort: Ascending date' },
+      { id: 'date-desc', label: 'Sort: Descending date' },
+      { id: 'name-asc', label: 'Sort: Ascending name' },
+      { id: 'name-desc', label: 'Sort: Descending name' },
+    ];
+
+    options.forEach((opt) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn secondary';
+      btn.style.width = '100%';
+      btn.style.textAlign = 'left';
+      btn.style.display = 'block';
+      btn.style.borderRadius = '0.45rem';
+      btn.style.margin = '0';
+      btn.style.boxShadow = 'none';
+      btn.style.background = opt.id === seminarSortMode ? 'rgba(32,58,115,0.08)' : '#fff';
+      btn.textContent = opt.id === seminarSortMode ? `✓ ${opt.label}` : opt.label;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        seminarSortMode = opt.id;
+        closeSeminarsSortMenu();
+        applySeminarFilters();
+      });
+      menu.appendChild(btn);
+    });
+
+    document.body.appendChild(menu);
+
+    const btnRect = seminarsSortBtn.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const left = Math.min(btnRect.right - menuRect.width, window.innerWidth - menuRect.width - 10);
+    const top = Math.min(btnRect.bottom + 8, window.innerHeight - menuRect.height - 10);
+    menu.style.left = `${Math.max(8, left)}px`;
+    menu.style.top = `${Math.max(8, top)}px`;
+
+    seminarsSortMenuEl = menu;
+    seminarsSortMenuCloseHandler = (e) => {
+      if (!seminarsSortMenuEl) return;
+      const target = e.target;
+      if (seminarsSortMenuEl.contains(target)) return;
+      if (seminarsSortBtn && seminarsSortBtn.contains(target)) return;
+      closeSeminarsSortMenu();
+    };
+    window.addEventListener('pointerdown', seminarsSortMenuCloseHandler, true);
   };
 
   const escapeHtml = (str) => {
@@ -1679,8 +1847,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const applySeminarFilters = () => {
-    const filtered = getFilteredSeminars();
+    const filtered = sortSeminarsByMode(getFilteredSeminars(), seminarSortMode);
     renderSeminarsCarousel(filtered);
+    applySeminarsViewMode();
 
     if (seminarsFilterStatusEl) {
       const hasFilter = Boolean(
@@ -1946,6 +2115,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (seminarsYearFilterEl) seminarsYearFilterEl.value = '';
     applySeminarFilters();
   });
+
+  seminarsViewSwipeBtn?.addEventListener('click', () => {
+    seminarViewMode = 'swipe';
+    applySeminarsViewMode();
+  });
+  seminarsViewGridBtn?.addEventListener('click', () => {
+    seminarViewMode = 'grid';
+    applySeminarsViewMode();
+  });
+  seminarsViewListBtn?.addEventListener('click', () => {
+    seminarViewMode = 'list';
+    applySeminarsViewMode();
+  });
+  seminarsSortBtn?.addEventListener('click', openSeminarsSortMenu);
 
   toggleDeletedSeminarsBtn?.addEventListener('click', async () => {
     setDeletedSeminarsModalVisibility(true);
@@ -2303,24 +2486,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  const exportFormatEl = document.getElementById('admin-export-format');
   exportBtn?.addEventListener('click', async () => {
     employeesStatusEl.textContent = '';
-    try {
-      const res = await authedFetch('/api/admin/reports/employees.csv');
-      const dataText = await res.text();
-      if (!res.ok) throw new Error(dataText || 'Export failed');
+    const format = (exportFormatEl?.value || 'pdf').toLowerCase();
+    const isPdf = format === 'pdf';
+    const baseEndpoint = isPdf ? '/api/admin/reports/ched.pdf' : '/api/admin/reports/employees.csv';
+    const filename = isPdf ? 'gims_ched_report.pdf' : 'gims_employees.csv';
+    const mime = isPdf ? 'application/pdf' : 'text/csv';
 
-      const blob = new Blob([dataText], { type: 'text/csv' });
+    const selectModeOn = Boolean(selectModeEl?.checked);
+    const selectedIds = Array.from(employeesTableEl.querySelectorAll('.admin-row-check'))
+      .filter((cb) => cb.checked)
+      .map((cb) => cb.value);
+    if (selectModeOn && selectedIds.length === 0) {
+      employeesStatusEl.textContent = 'No employees selected. Tick rows to include in the report, or turn off Select to export all.';
+      return;
+    }
+    const endpoint = selectedIds.length
+      ? `${baseEndpoint}?ids=${encodeURIComponent(selectedIds.join(','))}`
+      : baseEndpoint;
+    const originalLabel = exportBtn.textContent;
+    exportBtn.disabled = true;
+    const noun = selectedIds.length ? `${selectedIds.length} selected` : 'all';
+    exportBtn.textContent = isPdf ? `Generating PDF (${noun})…` : `Exporting (${noun})…`;
+    try {
+      const res = await authedFetch(endpoint);
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || 'Export failed');
+      }
+      const blob = isPdf ? await res.blob() : new Blob([await res.text()], { type: mime });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'gims_employees.csv';
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       employeesStatusEl.textContent = err.message || 'Failed to export.';
+    } finally {
+      exportBtn.disabled = false;
+      exportBtn.textContent = originalLabel;
     }
   });
 
