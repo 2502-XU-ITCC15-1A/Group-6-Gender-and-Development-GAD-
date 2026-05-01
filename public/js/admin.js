@@ -354,9 +354,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
+  const getSeminarCreatedMs = (seminar) => {
+    const createdAtMs = new Date(seminar?.createdAt || seminar?.created_at || 0).getTime();
+    if (!Number.isNaN(createdAtMs) && createdAtMs > 0) return createdAtMs;
+
+    const id = String(seminar?._id || '');
+    // Mongo ObjectId's first 8 hex chars represent timestamp seconds.
+    if (/^[a-fA-F0-9]{24}$/.test(id)) {
+      return Number.parseInt(id.slice(0, 8), 16) * 1000;
+    }
+    return 0;
+  };
+
   const sortSeminarsByMode = (seminars, mode) => {
     const list = Array.isArray(seminars) ? [...seminars] : [];
     const normalized = String(mode || 'date-asc').toLowerCase();
+    if (normalized === 'recently-added') {
+      return list.sort((a, b) => getSeminarCreatedMs(b) - getSeminarCreatedMs(a));
+    }
     if (normalized === 'date-desc') return sortSeminarsNearestToFarthest(list).reverse();
     if (normalized === 'name-asc') {
       return list.sort((a, b) => String(a?.title || '').localeCompare(String(b?.title || ''), undefined, { sensitivity: 'base' }));
@@ -449,6 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
     menu.style.minWidth = '240px';
 
     const options = [
+      { id: 'recently-added', label: 'Sort: Recently added' },
       { id: 'date-asc', label: 'Sort: Ascending date' },
       { id: 'date-desc', label: 'Sort: Descending date' },
       { id: 'name-asc', label: 'Sort: Ascending name' },
