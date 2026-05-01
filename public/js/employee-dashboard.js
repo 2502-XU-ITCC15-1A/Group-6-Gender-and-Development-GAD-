@@ -1038,6 +1038,42 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.href = '/';
   });
 
+  const sidebarLinks = Array.from(
+    document.querySelectorAll('.dashboard-sidebar-link[data-scroll-target]')
+  );
+  const sidebarSections = sidebarLinks
+    .map((link) => document.getElementById(link.getAttribute('data-scroll-target')))
+    .filter(Boolean);
+
+  let scrollSpyLocked = 0;
+  const setActiveSidebarLink = (targetId) => {
+    sidebarLinks.forEach((link) => {
+      link.classList.toggle(
+        'is-active',
+        link.getAttribute('data-scroll-target') === targetId
+      );
+    });
+  };
+
+  const updateActiveSidebarLink = () => {
+    if (scrollSpyLocked > Date.now()) return;
+    if (!sidebarLinks.length || !sidebarSections.length) return;
+    const nearBottom =
+      window.innerHeight + window.scrollY >=
+      document.documentElement.scrollHeight - 8;
+    if (nearBottom) {
+      setActiveSidebarLink(sidebarSections[sidebarSections.length - 1].id);
+      return;
+    }
+    const probe = window.innerHeight * 0.3;
+    let activeId = sidebarSections[0].id;
+    sidebarSections.forEach((section) => {
+      const rect = section.getBoundingClientRect();
+      if (rect.top <= probe) activeId = section.id;
+    });
+    setActiveSidebarLink(activeId);
+  };
+
   document.querySelectorAll('[data-scroll-target]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const targetId = btn.getAttribute('data-scroll-target');
@@ -1045,8 +1081,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const target = document.getElementById(targetId);
       if (!target) return;
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (btn.classList.contains('dashboard-sidebar-link')) {
+        setActiveSidebarLink(targetId);
+        scrollSpyLocked = Date.now() + 700;
+      }
     });
   });
+
+  if (sidebarLinks.length && sidebarSections.length) {
+    window.addEventListener('scroll', updateActiveSidebarLink, { passive: true });
+    window.addEventListener('resize', updateActiveSidebarLink, { passive: true });
+    updateActiveSidebarLink();
+  }
 
   // ========================
   // CERTIFICATE DOWNLOAD
