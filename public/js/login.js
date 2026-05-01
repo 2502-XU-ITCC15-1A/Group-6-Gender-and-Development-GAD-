@@ -15,6 +15,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const topbar = document.getElementById('topbar');
   const navbar = document.getElementById('navbar');
 
+  const navLinks = Array.from(document.querySelectorAll('.topbar-nav .nav-link[href^="#"]'));
+  const spySections = navLinks
+    .map(link => document.getElementById(link.getAttribute('href').slice(1)))
+    .filter(Boolean);
+
+  const updateActiveLink = () => {
+    if (!navLinks.length || !spySections.length) return;
+    const probe = window.innerHeight * 0.35;
+    let activeId = null;
+    spySections.forEach(section => {
+      const rect = section.getBoundingClientRect();
+      if (rect.top <= probe && rect.bottom >= probe) {
+        activeId = section.id;
+      }
+    });
+    navLinks.forEach(link => {
+      const target = link.getAttribute('href').slice(1);
+      link.classList.toggle('is-active', activeId !== null && target === activeId);
+    });
+  };
+
   const handleScroll = () => {
     const scrolled = window.scrollY > 10;
     if (topbar) {
@@ -23,10 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (navbar) {
       navbar.classList.toggle('is-scrolled', scrolled);
     }
+    updateActiveLink();
   };
 
   handleScroll();
   window.addEventListener('scroll', handleScroll, { passive: true });
+  window.addEventListener('resize', updateActiveLink, { passive: true });
 
   const form = document.getElementById('login-form');
   const statusEl = document.getElementById('login-status');
@@ -135,8 +158,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (forgotStatusEl) forgotStatusEl.textContent = 'Verify your PIN first.';
       return;
     }
-    if (newPassword.length < 8) {
-      if (forgotStatusEl) forgotStatusEl.textContent = 'New password must be at least 8 characters.';
+    if (
+      newPassword.length < 8 ||
+      !/[A-Z]/.test(newPassword) ||
+      !/[0-9]/.test(newPassword) ||
+      !/[^A-Za-z0-9]/.test(newPassword)
+    ) {
+      if (forgotStatusEl)
+        forgotStatusEl.textContent =
+          'New password must be at least 8 characters and include an uppercase letter, a number, and a special character.';
       return;
     }
 
