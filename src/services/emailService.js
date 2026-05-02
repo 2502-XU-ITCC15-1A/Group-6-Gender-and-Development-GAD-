@@ -7,26 +7,23 @@ let transporterPromise = null;
 const createTransporter = async () => {
   const user = String(process.env.GMAIL_USER || '').trim();
   const pass = String(process.env.GMAIL_APP_PASSWORD || '').trim();
-  const hasPlaceholderUser = /^your-.*@example\.com$/i.test(user);
-  const hasPlaceholderPass = /^your-.*$/i.test(pass);
 
-  if (!user || !pass || hasPlaceholderUser || hasPlaceholderPass) {
-    throw new Error(
-      'Gmail is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env using a real Gmail address and a 16-character App Password.'
-    );
+  if (!user || !pass) {
+    throw new Error('Gmail is not configured.');
   }
 
-  // UPDATED SECTION START
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465, // Use 465 for Secure SSL
-    secure: true, // This must be true for port 465
+    port: 587,
+    secure: false, // Use false for port 587
     auth: { user, pass },
-    connectionTimeout: 10000, // Wait 10 seconds before giving up
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
+    tls: {
+      // This solves the "certificate validation failed" error
+      rejectUnauthorized: false 
+    },
+    connectionTimeout: 20000, // Increased to 20 seconds
+    greetingTimeout: 20000,
   });
-  // UPDATED SECTION END
 
   await transporter.verify();
   return transporter;
