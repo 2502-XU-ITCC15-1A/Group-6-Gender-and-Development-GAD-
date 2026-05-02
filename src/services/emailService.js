@@ -12,18 +12,23 @@ const createTransporter = async () => {
     throw new Error('Gmail is not configured.');
   }
 
-  const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // Use false for port 587
-    auth: { user, pass },
-    tls: {
-      // This solves the "certificate validation failed" error
-      rejectUnauthorized: false 
-    },
-    connectionTimeout: 20000, // Increased to 20 seconds
-    greetingTimeout: 20000,
-  });
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true, // Use SSL
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+  tls: {
+    // This is the critical part to bypass university/cloud certificate blocks
+    rejectUnauthorized: false,
+    minVersion: "TLSv1.2"
+  },
+  connectionTimeout: 20000, // Increase wait time to 20 seconds
+  greetingTimeout: 20000,
+  socketTimeout: 20000
+});
 
   await transporter.verify();
   return transporter;
