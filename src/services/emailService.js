@@ -16,10 +16,17 @@ const createTransporter = async () => {
     );
   }
 
+  // UPDATED SECTION START
   const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465, // Use 465 for Secure SSL
+    secure: true, // This must be true for port 465
     auth: { user, pass },
+    connectionTimeout: 10000, // Wait 10 seconds before giving up
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
+  // UPDATED SECTION END
 
   await transporter.verify();
   return transporter;
