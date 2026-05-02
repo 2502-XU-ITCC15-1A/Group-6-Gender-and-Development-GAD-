@@ -1,45 +1,40 @@
-import nodemailer from 'nodemailer';
+import axios from 'axios';
 import Employee from '../models/Employee.js';
 import Seminar from '../models/Seminar.js';
 
-let transporterPromise = null;
 
-const createTransporter = async () => {
-  const user = String(process.env.GMAIL_USER || '').trim();
-  const pass = String(process.env.GMAIL_APP_PASSWORD || '').trim();
-  const hasPlaceholderUser = /^your-.*@example\.com$/i.test(user);
-  const hasPlaceholderPass = /^your-.*$/i.test(pass);
+const sendMailViaAPI = async (options) => {
+  try {
+    const payload = {
+      sender: { name: "GIMS", email: "kiethlybangamu@gmail.com" },
+      to: [{ email: options.to }],
+      subject: options.subject,
+      htmlContent: options.html,
+      textContent: options.text || "GIMS Notification"
+    };
 
-  if (!user || !pass || hasPlaceholderUser || hasPlaceholderPass) {
-    throw new Error(
-      'Gmail is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env using a real Gmail address and a 16-character App Password.'
-    );
-  }
+    // Brevo formatting for the certificate attachment
+    if (options.attachments && options.attachments.length > 0) {
+      payload.attachment = options.attachments.map(att => ({
+        name: att.filename,
+        // Brevo requires base64 string for content
+        content: Buffer.isBuffer(att.content) ? att.content.toString('base64') : att.content
+      }));
+    }
 
-  // UPDATED SECTION START
-  const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465, // Use 465 for Secure SSL
-    secure: true, // This must be true for port 465
-    auth: { user, pass },
-    connectionTimeout: 10000, // Wait 10 seconds before giving up
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
-  });
-  // UPDATED SECTION END
-
-  await transporter.verify();
-  return transporter;
-};
-
-const getTransporter = async () => {
-  if (!transporterPromise) {
-    transporterPromise = createTransporter().catch((err) => {
-      transporterPromise = null;
-      throw err;
+    const response = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+      headers: {
+        'api-key': process.env.BREVO_API_KEY, // Ensure this is set in Render Dashboard
+        'Content-Type': 'application/json'
+      }
     });
+
+    console.log('Email sent successfully via API!');
+    return response.data;
+  } catch (error) {
+    console.error("Brevo API Error:", error.response?.data || error.message);
+    throw error;
   }
-  return transporterPromise;
 };
 
 const sendMailWithRetry = async (mailOptions) => {
@@ -189,12 +184,11 @@ export const sendVerificationPinEmail = async (email, code, expiresAt) => {
     body: `<p style="margin:0;">Enter this code on the signup page to complete your email verification. If you did not start a GIMS signup, you can safely ignore this message.</p>`,
   });
 
-  await sendMailWithRetry({
-    from: `"GIMS" <${process.env.GMAIL_USER}>`,
+await sendMailViaAPI({
     to: email,
     subject: 'Your GIMS verification PIN',
-    text: `Your GIMS verification PIN is: ${code}\n\nThis code expires at ${expiresStr} (5 minutes).\n\nIf you did not start a GIMS signup, you can ignore this message.\n\n— Xavier University GAD Office`,
-    html,
+    text: `Your GIMS verification PIN is: ${code}`, // Simple text fallback
+    html, // Your beautiful branded template
   });
 };
 
@@ -213,7 +207,7 @@ export const sendPasswordResetPinEmail = async (email, code, expiresAt) => {
     body: `<p style="margin:0;">If you did not request a password reset, you can safely ignore this email — your account remains secure.</p>`,
   });
 
-  await sendMailWithRetry({
+  await sendMailViaAPI({
     from: `"GIMS" <${process.env.GMAIL_USER}>`,
     to: email,
     subject: 'GIMS password reset PIN',
@@ -235,11 +229,10 @@ export const sendTemporaryPasswordEmail = async (email, tempPassword) => {
     body: `<p style="margin:0;">For your security, this password should be changed as soon as you sign in. If you did not expect this reset, please contact the GAD Office.</p>`,
   });
 
-  await sendMailWithRetry({
-    from: `"GIMS" <${process.env.GMAIL_USER}>`,
+  await sendMailViaAPI({
     to: email,
-    subject: 'GIMS temporary password',
-    text: `Your GIMS password has been reset by an administrator.\n\nTemporary password: ${tempPassword}\n\nPlease sign in and change it as soon as possible.\n\n— Xavier University GAD Office`,
+    subject: 'Your GIMS temporary password', 
+    text: `Your temporary password is: ${tempPassword}`, 
     html,
   });
 };
@@ -280,7 +273,7 @@ export const sendCertificateEmail = async ({
       ]
     : [];
 
-  await sendMailWithRetry({
+  await sendMailViaAPI({
     from: `"GIMS" <${process.env.GMAIL_USER}>`,
     to: employee.email,
     subject: `Your GIMS certificate: ${seminarTitle}`,
@@ -311,7 +304,7 @@ export const sendReminderEmail = async (employee, remainingCount) => {
       <p style="margin: 16px 0 0; color:${COLORS.muted}; font-size: 14px;">Thank you for your continued participation in shaping a more inclusive Xavier University.</p>`,
   });
 
-  await sendMailWithRetry({
+  await sendMailViaAPI({
     from: `"XU GAD Office" <${process.env.GMAIL_USER}>`,
     to: employee.email,
     subject: 'GAD Seminar Compliance Reminder',
