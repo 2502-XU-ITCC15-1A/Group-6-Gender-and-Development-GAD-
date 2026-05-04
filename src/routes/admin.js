@@ -305,6 +305,7 @@ router.get('/employees', authMiddleware, async (req, res, next) => {
         accountStatus: e.accountStatus === 'deactivated' ? 'deactivated' : 'active',
         isActive: e.accountStatus !== 'deactivated',
         deactivatedAt: e.deactivatedAt || null,
+        registeredAt: e.createdAt || null,
         updatedAt: e.updatedAt,
       };
     });
@@ -437,6 +438,7 @@ router.get('/employees/:id/profile', authMiddleware, async (req, res, next) => {
         position: employee.position || '',
         accountStatus: employee.accountStatus === 'deactivated' ? 'deactivated' : 'active',
         deactivatedAt: employee.deactivatedAt || null,
+        registeredAt: employee.createdAt || null,
         seminarStatus: attended >= required ? 'Complete' : 'Incomplete',
         completionText: `${attended}/${required}`,
       },

@@ -88,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const profileEmailEl = document.getElementById('admin-employee-profile-email');
   const profileDepartmentEl = document.getElementById('admin-employee-profile-department');
   const profilePositionEl = document.getElementById('admin-employee-profile-position');
+  const profileRegisteredEl = document.getElementById('admin-employee-profile-registered');
   const profileStatusEl = document.getElementById('admin-employee-profile-status');
   const profileReservedCountEl = document.getElementById('admin-employee-profile-reserved-count');
   const profileTakenCountEl = document.getElementById('admin-employee-profile-taken-count');
@@ -524,6 +525,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const normalizeAccountStatus = (value) => {
     return String(value || '').toLowerCase() === 'deactivated' ? 'deactivated' : 'active';
+  };
+
+  const formatRegisteredDate = (value) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
   };
 
   const getAccountStatusBadge = (value) => {
@@ -1277,6 +1285,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderEmailLink(profileEmailEl, row.email);
     if (profileDepartmentEl) profileDepartmentEl.textContent = row.department || '—';
     if (profilePositionEl) profilePositionEl.textContent = row.position || '—';
+    if (profileRegisteredEl) profileRegisteredEl.textContent = formatRegisteredDate(row.registeredAt);
     if (profileStatusEl) {
       const baseStatus = row.seminarStatus || '—';
       const accountText = normalizeAccountStatus(row.accountStatus) === 'deactivated' ? ' • Account: Deactivated' : '';
@@ -1312,6 +1321,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderEmailLink(profileEmailEl, profile.email || row.email);
       if (profileDepartmentEl) profileDepartmentEl.textContent = profile.department || row.department || '—';
       if (profilePositionEl) profilePositionEl.textContent = profile.position || row.position || '—';
+      if (profileRegisteredEl) profileRegisteredEl.textContent = formatRegisteredDate(profile.registeredAt || row.registeredAt);
       if (profileStatusEl) {
         const statusLabel = profile.seminarStatus || row.seminarStatus || '—';
         const completionText = profile.completionText ? ` (${profile.completionText})` : '';
@@ -1909,6 +1919,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <td><input type="checkbox" class="admin-row-check" value="${row.id}" style="${checkboxStyle}" /></td>
             <td>${escapeHtml(row.employeeId)}</td>
             <td>${escapeHtml(row.department)}</td>
+            <td>${escapeHtml(formatRegisteredDate(row.registeredAt))}</td>
             <td>${statusBadge}</td>
             <td><button class="table-link-btn" type="button" data-employee-account-menu="${row.id}">${accountBadge}</button></td>
           </tr>
@@ -1924,6 +1935,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <th><input type="checkbox" id="admin-select-all" ${checkboxesEnabled ? '' : 'disabled'} /></th>
             <th>Employee ID</th>
             <th>Department</th>
+            <th>Registered</th>
             <th>Seminar Status</th>
             <th>Account</th>
           </tr>
