@@ -335,7 +335,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const minutes = match[2];
     const period = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12 || 12;
-    return `${hours}:${minutes} ${period}`;
+    return `${hours}:${minutes}\u00A0${period}`;
+  };
+
+  /** Multi-day seminar: list each session date & time (Manage Seminars cards). */
+  const buildAdminSessionsScheduleBlock = (sessions, opts = {}) => {
+    if (!Array.isArray(sessions) || sessions.length <= 1) return '';
+    const label = opts.label || 'All sessions';
+    const items = sessions.map((sess, idx) => {
+      const line = `Day ${idx + 1}: ${formatDate(sess.date)} • ${formatTime(sess.startTime)}`;
+      return `<div class="muted small" style="font-size:0.68rem; margin-top:0.14rem; line-height:1.25; letter-spacing:-0.01em; opacity:0.92;">${escapeHtml(line)}</div>`;
+    });
+    return `
+      <div style="margin-top:0.35rem; padding-top:0.4rem; border-top:1px solid rgba(15,23,42,0.08);">
+        <div class="muted small" style="font-size:0.65rem; font-weight:600; letter-spacing:0.015em; opacity:0.85;">${escapeHtml(label)}</div>
+        ${items.join('')}
+      </div>`;
   };
 
   const parseTimeToMinutes = (value) => {
@@ -753,23 +768,23 @@ document.addEventListener('DOMContentLoaded', () => {
       const locked = Boolean(sess?.locked);
       return `
         <div class="session-row" data-session-date="${escapeHtml(dateStr)}">
-          <div style="flex:1; min-width:0;">
-            <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.3rem;">
-              <span style="font-weight:600; font-size:0.88rem;">${escapeHtml(label)}</span>
+          <div class="session-row-main">
+            <div class="session-row-header">
+              <span class="session-row-title">${escapeHtml(label)}</span>
               ${locked ? '<span class="badge badge-green" style="font-size:0.72rem; padding:0.1rem 0.45rem;">Held — locked</span>' : ''}
             </div>
-            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-              <label style="margin-bottom:0; font-size:0.8rem;">
+            <div class="session-fields-grid">
+              <label class="session-field">
                 Time
-                <input type="time" class="session-time-input" value="${escapeHtml(sess.startTime || '08:00')}" ${locked ? 'disabled' : ''} style="font-size:0.82rem; padding:0.22rem 0.35rem;" />
+                <input type="time" class="session-time-input" value="${escapeHtml(sess.startTime || '08:00')}" ${locked ? 'disabled' : ''} />
               </label>
-              <label style="margin-bottom:0; font-size:0.8rem;">
+              <label class="session-field">
                 Duration (hrs)
-                <input type="number" class="session-duration-input" value="${escapeHtml(String(sess.durationHours || 1))}" min="0.5" step="0.5" ${locked ? 'disabled' : ''} style="font-size:0.82rem; padding:0.22rem 0.35rem; width:5rem;" />
+                <input type="number" class="session-duration-input" value="${escapeHtml(String(sess.durationHours || 1))}" min="0.5" step="0.5" ${locked ? 'disabled' : ''} />
               </label>
             </div>
           </div>
-          ${!locked ? `<button type="button" class="session-remove-btn btn secondary" style="padding:0.28rem 0.55rem; font-size:0.8rem; border-color:#dc2626; color:#b91c1c; align-self:center; white-space:nowrap; flex-shrink:0;">✕</button>` : ''}
+          ${!locked ? '<button type="button" class="session-remove-btn btn secondary">✕</button>' : ''}
         </div>
       `;
     }).join('');
@@ -1646,6 +1661,17 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    const isListView = seminarViewMode === 'list';
+    const actionGroupStyle = isListView
+      ? 'display:flex; gap:0.55rem; flex-wrap:wrap; margin-top:auto;'
+      : 'display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:0.55rem; margin-top:auto; align-items:stretch;';
+    const wideButtonStyle = isListView
+      ? 'min-width:9.6rem; justify-content:center; text-align:center;'
+      : 'width:100%; min-width:0; justify-content:center; text-align:center; white-space:nowrap; padding-left:0.8rem; padding-right:0.8rem;';
+    const shortButtonStyle = isListView
+      ? 'min-width:5.6rem; justify-content:center; text-align:center;'
+      : 'width:100%; min-width:0; justify-content:center; text-align:center; white-space:nowrap; padding-left:0.8rem; padding-right:0.8rem;';
+
     seminarsCarouselEl.innerHTML = seminars
       .map((seminar) => {
         const registeredCount = Array.isArray(seminar.registeredEmployees) ? seminar.registeredEmployees.length : 0;
@@ -1657,23 +1683,26 @@ document.addEventListener('DOMContentLoaded', () => {
           <article class="card" style="box-shadow:none; padding: 1rem; min-width: 320px; flex: 0 0 320px; display:flex; flex-direction:column; gap: 0.75rem;">
             <div style="display:flex; justify-content: space-between; gap: 0.5rem; align-items:flex-start;">
               <h3 style="margin:0; color: var(--xu-blue);">${escapeHtml(seminar.title || 'Untitled Seminar')}</h3>
-              <span class="badge badge-soft" style="white-space:nowrap;">${escapeHtml(mandatoryLabel)}</span>
+              <span class="badge badge-soft" style="display:inline-flex; align-items:center; justify-content:center; min-width:6.9rem; padding:0.32rem 0.9rem; text-align:center; white-space:nowrap; align-self:flex-start;">${escapeHtml(mandatoryLabel)}</span>
             </div>
 
             <div class="muted small">${escapeHtml(formatDate(seminar.date))} - ${escapeHtml(formatTime(seminar.startTime))}</div>
             ${Array.isArray(seminar.sessions) && seminar.sessions.length > 1
-              ? `<div class="muted small" style="color:var(--xu-blue); font-weight:600;">${seminar.sessions.length} sessions &bull; ${seminar.multiSessionType === 'pick-one' ? 'Pick one day' : 'Attend all'}</div>`
+              ? `<div class="muted small" style="color:var(--xu-blue); font-weight:600;">${seminar.sessions.length} sessions &bull; ${seminar.multiSessionType === 'pick-one' ? 'Pick one day' : 'Attend all'}</div>${buildAdminSessionsScheduleBlock(seminar.sessions, {
+                  label: seminar.multiSessionType === 'pick-one' ? 'All session options' : 'Every session',
+                })}`
               : `<div class="muted small">Duration: ${escapeHtml(seminar.durationHours || 0)} hour(s)</div>`
             }
             <div class="muted small">Reserved: ${escapeHtml(registeredCount)}/${escapeHtml(capacity)}</div>
             <div class="muted small">Status: ${escapeHtml(heldLabel)} ${autoSendLabel ? `• <span style="color:#059669;">${escapeHtml(autoSendLabel)}</span>` : ''}</div>
+            <div style="height:1px; background:var(--border); margin:0.1rem 0 0.2rem;"></div>
             <div class="muted" style="font-size: 0.92rem; line-height:1.4;">${escapeHtml(seminar.description || '')}</div>
 
-            <div style="display:flex; gap: 0.55rem; flex-wrap: wrap; margin-top: auto;">
-              <button class="btn secondary" type="button" data-seminar-view="${seminar._id}">View Participants</button>
-              <button class="btn secondary" type="button" data-seminar-held="${seminar._id}" ${seminar.isHeld ? 'disabled' : ''}>${seminar.isHeld ? 'Held' : 'Seminar Held'}</button>
-              <button class="btn" type="button" data-seminar-edit="${seminar._id}">Edit</button>
-              <button class="btn secondary" type="button" data-seminar-delete="${seminar._id}">Delete</button>
+            <div style="${actionGroupStyle}">
+              <button class="btn secondary" type="button" data-seminar-view="${seminar._id}" style="${wideButtonStyle}">View Participants</button>
+              <button class="btn secondary" type="button" data-seminar-held="${seminar._id}" ${seminar.isHeld ? 'disabled' : ''} style="${wideButtonStyle}">${seminar.isHeld ? 'Held' : 'Seminar Held'}</button>
+              <button class="btn" type="button" data-seminar-edit="${seminar._id}" style="${shortButtonStyle}">Edit</button>
+              <button class="btn secondary" type="button" data-seminar-delete="${seminar._id}" style="${shortButtonStyle}">Delete</button>
             </div>
           </article>
         `;
@@ -1747,6 +1776,11 @@ document.addEventListener('DOMContentLoaded', () => {
               <div>
                 <div style="font-weight:700; color:var(--xu-blue);">${escapeHtml(seminar?.title || 'Untitled seminar')}</div>
                 <div class="muted small" style="margin-top:0.18rem;">${escapeHtml(formatDate(seminar?.date))} - ${escapeHtml(formatTime(seminar?.startTime))}</div>
+                ${Array.isArray(seminar?.sessions) && seminar.sessions.length > 1
+                  ? buildAdminSessionsScheduleBlock(seminar.sessions, {
+                      label: seminar.multiSessionType === 'pick-one' ? 'All session options' : 'Every session',
+                    })
+                  : ''}
                 <div class="muted small" style="margin-top:0.1rem;">${escapeHtml(getRetentionDaysLeftText(seminar?.deletePermanentlyAt))}</div>
               </div>
               <div style="display:flex; gap:0.45rem; flex-wrap:wrap;">
