@@ -447,9 +447,15 @@ router.get('/certificates/:registrationId/download', async (req, res, next) => {
     });
 
     const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
-    });
+  headless: true, // Use 'new' if your puppeteer version is 20+
+  executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--single-process'
+  ],
+});
 
     let pngBuffer;
     try {
