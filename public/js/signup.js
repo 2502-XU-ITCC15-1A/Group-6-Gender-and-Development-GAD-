@@ -148,6 +148,52 @@ document.addEventListener('DOMContentLoaded', () => {
   const submitBtn = document.getElementById('signup-submit-btn');
   const cancelBtn = document.getElementById('signup-cancel-btn');
 
+  const errorPopupEl = document.getElementById('signup-error-popup');
+  const errorPopupMsgEl = document.getElementById('signup-error-popup-message');
+  const errorPopupCloseBtn = document.getElementById('signup-error-popup-close');
+  let errorPopupTimer = null;
+  const showErrorPopup = (message) => {
+    if (!errorPopupEl || !errorPopupMsgEl) {
+      window.alert(message);
+      return;
+    }
+    errorPopupMsgEl.textContent = message;
+    errorPopupEl.classList.add('is-visible');
+    if (errorPopupTimer) clearTimeout(errorPopupTimer);
+    errorPopupTimer = setTimeout(() => {
+      errorPopupEl.classList.remove('is-visible');
+    }, 6000);
+  };
+  const hideErrorPopup = () => {
+    errorPopupEl?.classList.remove('is-visible');
+    if (errorPopupTimer) clearTimeout(errorPopupTimer);
+    errorPopupTimer = null;
+  };
+  errorPopupCloseBtn?.addEventListener('click', hideErrorPopup);
+
+  const requiredFieldMap = [
+    { input: firstNameInput, label: 'First Name' },
+    { input: lastNameInput, label: 'Last Name' },
+    { input: departmentInput, label: 'Department' },
+    { input: positionInput, label: 'Position' },
+    { input: birthSexInput, label: 'Birth Sex' },
+  ];
+  const markFieldInvalid = (input, invalid) => {
+    if (!input) return;
+    const labelEl = input.closest('label');
+    if (labelEl) labelEl.classList.toggle('is-required-missing', Boolean(invalid));
+    input.classList.toggle('is-invalid', Boolean(invalid));
+    if (invalid) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+  };
+  const clearAllFieldErrors = () => {
+    requiredFieldMap.forEach(({ input }) => markFieldInvalid(input, false));
+    if (passwordInput) markFieldInvalid(passwordInput, false);
+  };
+  [firstNameInput, lastNameInput, departmentInput, positionInput, birthSexInput, passwordInput].forEach((input) => {
+    input?.addEventListener('input', () => markFieldInvalid(input, false));
+  });
+
   /** @type {string | null} */
   let registrationToken = null;
   /** @type {string | null} */
@@ -312,8 +358,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   submitBtn?.addEventListener('click', async () => {
     clearStatus();
+    clearAllFieldErrors();
     if (!registrationToken && !googleProfileToken) {
       completeStatusEl.textContent = 'Please verify your PIN before creating an account.';
+      showErrorPopup('Please verify your XU email PIN before creating an account.');
       return;
     }
 
@@ -332,19 +380,36 @@ document.addEventListener('DOMContentLoaded', () => {
       payload.password = /** @type {HTMLInputElement} */ (passwordInput).value.trim();
     }
 
-    const requiredMissing = !payload.firstName || !payload.lastName || !payload.department || !payload.position || !payload.birthSex;
-    if (requiredMissing || (!googleProfileToken && !payload.password)) {
-      completeStatusEl.textContent = googleProfileToken
-        ? 'First Name, Last Name, Department, Position, and Birth Sex are required.'
-        : 'First Name, Last Name, Department, Position, Birth Sex, and Password are required.';
+    const missingLabels = [];
+    requiredFieldMap.forEach(({ input, label }) => {
+      const value = input ? /** @type {HTMLInputElement} */ (input).value.trim() : '';
+      if (!value) {
+        markFieldInvalid(input, true);
+        missingLabels.push(label);
+      }
+    });
+    if (!googleProfileToken && !payload.password) {
+      markFieldInvalid(passwordInput, true);
+      missingLabels.push('Password');
+    }
+
+    if (missingLabels.length) {
+      const msg = `These required field${missingLabels.length > 1 ? 's are' : ' is'} missing: ${missingLabels.join(', ')}.`;
+      completeStatusEl.textContent = msg;
+      showErrorPopup(msg);
+      const firstMissing = requiredFieldMap.find(({ input }) => input?.classList.contains('is-invalid'));
+      (firstMissing?.input || passwordInput)?.focus();
       return;
     }
 
     if (!googleProfileToken) {
       const pw = payload.password;
       if (pw.length < 8 || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw) || !/[^A-Za-z0-9]/.test(pw)) {
-        completeStatusEl.textContent =
-          'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.';
+        const msg = 'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.';
+        completeStatusEl.textContent = msg;
+        showErrorPopup(msg);
+        markFieldInvalid(passwordInput, true);
+        passwordInput?.focus();
         return;
       }
     }
@@ -382,7 +447,9 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = '/employee.html';
       }, 1200);
     } catch (err) {
-      completeStatusEl.textContent = err.message || 'Failed to create account.';
+      const msg = err.message || 'Failed to create account.';
+      completeStatusEl.textContent = msg;
+      showErrorPopup(msg);
       submitBtn.disabled = false;
       submitBtn.textContent = 'Create Account';
     }
@@ -393,6 +460,8 @@ document.addEventListener('DOMContentLoaded', () => {
     verifiedEmail = null;
     setProfileEnabled(false);
     clearStatus();
+    clearAllFieldErrors();
+    hideErrorPopup();
 
     if (emailInput) /** @type {HTMLInputElement} */ (emailInput).value = '';
     if (pinInput) {

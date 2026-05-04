@@ -415,21 +415,47 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const emailField = form?.querySelector('input[name="email"]');
+  const passwordField = form?.querySelector('input[name="password"]');
+  const submitBtnLabel = submitBtn?.textContent || 'Login';
+
+  const clearFieldError = (input) => {
+    if (!input) return;
+    input.classList.remove('is-invalid');
+    input.removeAttribute('aria-invalid');
+  };
+  const markFieldError = (input) => {
+    if (!input) return;
+    input.classList.add('is-invalid');
+    input.setAttribute('aria-invalid', 'true');
+  };
+  emailField?.addEventListener('input', () => clearFieldError(emailField));
+  passwordField?.addEventListener('input', () => clearFieldError(passwordField));
+
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!form || !statusEl) return;
     statusEl.textContent = '';
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Signing in...';
-    }
+    statusEl.classList.remove('is-error');
+    clearFieldError(emailField);
+    clearFieldError(passwordField);
+
     const data = new FormData(form);
     const email = String(data.get('email') || '').trim();
     const password = String(data.get('password') || '').trim();
 
     if (!email || !password) {
-      statusEl.textContent = 'Please enter both email and password.';
+      if (!email) markFieldError(emailField);
+      if (!password) markFieldError(passwordField);
+      statusEl.textContent = 'Please fill in the highlighted field(s).';
+      statusEl.classList.add('is-error');
+      (!email ? emailField : passwordField)?.focus();
       return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Signing in...';
     }
 
     try {
@@ -459,10 +485,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 900);
     } catch (err) {
       statusEl.textContent = err.message || 'Login failed.';
+      statusEl.classList.add('is-error');
+      const msg = String(err.message || '').toLowerCase();
+      if (msg.includes('credential') || msg.includes('password') || msg.includes('invalid')) {
+        markFieldError(emailField);
+        markFieldError(passwordField);
+      }
     } finally {
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Login';
+        submitBtn.textContent = submitBtnLabel;
       }
     }
   });
