@@ -9,6 +9,7 @@
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap"></noscript>
     <link rel="stylesheet" href="/css/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
       .signup-step2 { position: relative; transition: opacity 0.25s ease, filter 0.25s ease; }
       .signup-step2.is-locked {
@@ -67,8 +68,28 @@
 
     <main class="container">
       <section class="card auth-card">
-        <h2>Step 1: Verify your XU email</h2>
-        <p class="muted small">
+        <div id="signup-google-banner" style="display:none; background:rgba(32,58,115,0.06); border:1px solid rgba(32,58,115,0.18); border-radius:0.6rem; padding:0.85rem 1rem; margin-bottom:1rem;">
+          <strong style="color: var(--xu-blue, #203a73);">Signed in with Google</strong>
+          <p class="muted small" style="margin:0.3rem 0 0;">
+            Your Xavier email is verified via Google. Just complete your profile below to finish creating your account — no PIN or password needed.
+          </p>
+        </div>
+
+        <div id="signup-google-card" style="margin-bottom:1.25rem;">
+          <h2 style="margin-top:0;">Quick sign-up with Google</h2>
+          <p class="muted small">
+            Use your <strong>@xu.edu.ph</strong> or <strong>@my.xu.edu.ph</strong> Google account to skip the email PIN step.
+          </p>
+          <div id="signup-google-container" style="display:flex; justify-content:flex-start; margin-top:0.5rem;"></div>
+          <div style="display:flex; align-items:center; gap:0.6rem; margin:1rem 0 0; color:var(--muted); font-size:0.82rem;">
+            <span style="flex:1; height:1px; background:var(--border);"></span>
+            <span>or use email + PIN</span>
+            <span style="flex:1; height:1px; background:var(--border);"></span>
+          </div>
+        </div>
+
+        <h2 id="signup-step1-heading">Step 1: Verify your XU email</h2>
+        <p class="muted small" id="signup-step1-help">
           Enter your Xavier Gmail address and request a 6‑digit verification PIN. This code will expire in 5 minutes.
         </p>
         <form id="signup-form">
