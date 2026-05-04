@@ -866,16 +866,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     preRegListEl.innerHTML = `
       <table class="table">
-        <thead>
-          <tr>
-            <th><input type="checkbox" id="pre-reg-select-all-inner" /></th>
-            <th>Name</th>
-            <th>Department</th>
-            <th>Position</th>
-            <th>Email</th>
-            <th>Status</th>
-          </tr>
-        </thead>
+      <thead>
+  <tr>
+    <th><input type="checkbox" id="pre-reg-select-all-inner" /></th>
+    <th>Name</th>
+    <th>Department</th>
+    <th>Position</th>
+    <th>Email</th>
+    <th>Date Registered</th> <!-- Add this line -->
+    <th>Status</th>
+  </tr>
+</thead>
         <tbody>
           ${preRegRows
             .map(
@@ -888,6 +889,9 @@ document.addEventListener('DOMContentLoaded', () => {
                   <td>${escapeHtml(row.department || '—')}</td>
                   <td>${escapeHtml(row.position || '—')}</td>
                   <td>${escapeHtml(row.email || '—')}</td>
+
+                  <td>${new Date(row.registeredAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</td>
+                  <td>${row.registeredAt ? new Date(row.registeredAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '-'}</td>
                   <td><span class="badge badge-soft badge-pending">Pending</span></td>
                 </tr>
               `
