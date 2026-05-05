@@ -58,6 +58,8 @@ const RegistrationSchema = new mongoose.Schema(
 );
 
 RegistrationSchema.index({ seminarID: 1, employeeID: 1 }, { unique: true });
+RegistrationSchema.index({ employeeID: 1, status: 1, certificateIssued: 1 });
+RegistrationSchema.index({ status: 1 });
 
 export default mongoose.model('Registration', RegistrationSchema);
 

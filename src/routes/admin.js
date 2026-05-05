@@ -900,6 +900,7 @@ router.get('/seminars/:id/participants', authMiddleware, async (req, res, next) 
         department: r.employeeID?.department,
         position: r.employeeID?.position,
         email: r.employeeID?.email,
+        registeredAt: r.registeredAt || r.createdAt || null,
         status: r.status,
         certificateIssued: Boolean(r.certificateIssued),
         evaluationAvailable: Boolean(r.evaluationAvailable),
@@ -1012,13 +1013,22 @@ router.post('/seminars/:id/held', authMiddleware, async (req, res, next) => {
   try {
     const seminar = await findActiveSeminarById(req.params.id);
     if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
-    if (!seminar.isHeld) {
+    // Allow toggling via body { isHeld: false } or { held: false }
+    const desired = (req.body && (req.body.isHeld ?? req.body.held));
+    const targetHeld = typeof desired === 'boolean' ? desired : true;
+    if (targetHeld && !seminar.isHeld) {
       seminar.isHeld = true;
       seminar.heldAt = new Date();
       await seminar.save();
+    } else if (!targetHeld && seminar.isHeld) {
+      seminar.isHeld = false;
+      seminar.heldAt = undefined;
+      await seminar.save();
     }
     res.json({
-      message: 'Seminar marked as held. You can now record attendance.',
+      message: seminar.isHeld
+        ? 'Seminar marked as held. You can now record attendance.'
+        : 'Seminar unmarked as held.',
       seminar,
     });
   } catch (err) {

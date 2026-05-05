@@ -157,12 +157,19 @@ seminarsBtn?.addEventListener('click', async () => {
         const mandatoryLabel = s.mandatory ? 'YES' : 'NO';
         const remaining = (s.capacity || 0) - (Array.isArray(s.registeredEmployees) ? s.registeredEmployees.length : 0);
         const slotsText = `${Math.max(remaining, 0)} / ${s.capacity}`;
+        const locationLine = s.location ? `Location: ${escapeHtml(s.location)}<br />` : '';
+        const desc = escapeHtml(s.description || '');
+        const showToggle = (s.description || '').length > 140;
         return `
-          <article class="card">
+          <article class="card seminar-card">
             <h3>${escapeHtml(s.title || '')}</h3>
-            <p class="muted">${escapeHtml(s.description || '')}</p>
+            <div class="seminar-desc-wrap" data-desc-wrap>
+              <p class="muted seminar-desc-clamp" data-desc-text style="display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; margin:0;">${desc}</p>
+              ${showToggle ? `<button type="button" class="link-btn" data-desc-toggle style="background:none; border:none; color:var(--xu-blue); padding:0; margin-top:0.2rem; cursor:pointer; font-size:0.82rem; font-weight:600;">View more</button>` : ''}
+            </div>
             <p class="muted small">
               Date: ${escapeHtml(date)}<br />
+              ${locationLine}
               Time: ${escapeHtml(s.startTime || '')}<br />
               Duration: ${escapeHtml(String(s.durationHours || ''))} hours<br />
               Mandatory: ${escapeHtml(mandatoryLabel)}<br />
@@ -246,15 +253,24 @@ registrationsBtn?.addEventListener('click', async () => {
       return;
     }
 
+    const fmt = (v) => {
+      if (!v) return '—';
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+    };
     const rows = data
       .map((r) => {
         const seminar = r.seminarID || {};
-        const date = seminar.date ? new Date(seminar.date).toLocaleDateString() : '';
+        const seminarDate = fmt(seminar.date);
+        const registeredDate = fmt(r.registeredAt || r.createdAt);
+        const location = seminar.location ? `<br />Location: ${escapeHtml(seminar.location)}` : '';
         return `
           <article class="card">
             <h3>${escapeHtml(seminar.title || '')}</h3>
             <p class="muted small">
-              Date: ${escapeHtml(date)} • Status: ${escapeHtml(r.status || '')}
+              Seminar Date: ${escapeHtml(seminarDate)}${location}<br />
+              Date Registered: ${escapeHtml(registeredDate)}<br />
+              Status: ${escapeHtml(r.status || '')}
             </p>
           </article>
         `;
@@ -356,6 +372,49 @@ loadArticlesBtn?.addEventListener('click', async () => {
   } catch (err) {
     console.error('[employee] load articles list failed', err);
     articlesStatus.textContent = `Load failed: ${err.message}`;
+  }
+});
+
+// Seminars view toggle (swipe / grid / list) for #upcoming-carousel
+const upcomingCarouselEl = document.getElementById('upcoming-carousel');
+const upcomingViewSwipeBtn = document.getElementById('employee-upcoming-view-swipe');
+const upcomingViewGridBtn = document.getElementById('employee-upcoming-view-grid');
+const upcomingViewListBtn = document.getElementById('employee-upcoming-view-list');
+
+const setUpcomingView = (mode) => {
+  if (!upcomingCarouselEl) return;
+  upcomingCarouselEl.classList.remove('view-swipe', 'view-grid', 'view-list');
+  upcomingCarouselEl.classList.add(`view-${mode}`);
+  [upcomingViewSwipeBtn, upcomingViewGridBtn, upcomingViewListBtn].forEach((btn) => {
+    if (btn) btn.classList.remove('is-active');
+  });
+  if (mode === 'swipe' && upcomingViewSwipeBtn) upcomingViewSwipeBtn.classList.add('is-active');
+  if (mode === 'grid' && upcomingViewGridBtn) upcomingViewGridBtn.classList.add('is-active');
+  if (mode === 'list' && upcomingViewListBtn) upcomingViewListBtn.classList.add('is-active');
+};
+
+upcomingViewSwipeBtn?.addEventListener('click', () => setUpcomingView('swipe'));
+upcomingViewGridBtn?.addEventListener('click', () => setUpcomingView('grid'));
+upcomingViewListBtn?.addEventListener('click', () => setUpcomingView('list'));
+
+// Delegated "View more" toggle for seminar descriptions
+document.addEventListener('click', (e) => {
+  const target = e.target;
+  if (!(target instanceof HTMLElement)) return;
+  const btn = target.closest('[data-desc-toggle]');
+  if (!btn) return;
+  const wrap = btn.closest('[data-desc-wrap]');
+  const text = wrap?.querySelector('[data-desc-text]');
+  if (!text) return;
+  const expanded = text.classList.toggle('seminar-desc-expanded');
+  if (expanded) {
+    text.style.webkitLineClamp = 'unset';
+    text.style.display = 'block';
+    btn.textContent = 'View less';
+  } else {
+    text.style.display = '-webkit-box';
+    text.style.webkitLineClamp = '3';
+    btn.textContent = 'View more';
   }
 });
 

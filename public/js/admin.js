@@ -939,9 +939,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   <td>${escapeHtml(row.department || '—')}</td>
                   <td>${escapeHtml(row.position || '—')}</td>
                   <td>${escapeHtml(row.email || '—')}</td>
-
-                  <td>${new Date(row.registeredAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</td>
-                  <td>${row.registeredAt ? new Date(row.registeredAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '-'}</td>
+                  <td>${escapeHtml(formatRegisteredDate(row.registeredAt))}</td>
                   <td><span class="badge badge-soft badge-pending">Pending</span></td>
                 </tr>
               `
@@ -1636,7 +1634,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const isAlreadyOpen = seminarParticipantsModalEl.style.display === 'flex';
     const savedTab = isAlreadyOpen ? attendanceModalState.currentTab : 'pre-registered';
 
-    seminarParticipantsMetaEl.textContent = `${seminar.title || 'Seminar'} — ${formatDate(seminar.date)} ${formatTime(seminar.startTime)}`;
+    // Build schedule summary: support multi-session
+    const buildScheduleSummary = (sm) => {
+      if (Array.isArray(sm.sessions) && sm.sessions.length > 1) {
+        return sm.sessions
+          .map((sess, idx) => {
+            const dt = formatDate(sess.date);
+            const st = formatTime(sess.startTime);
+            const et = sess.endTime ? `–${formatTime(sess.endTime)}` : '';
+            return `Day ${idx + 1}: ${dt} • ${st}${et}`;
+          })
+          .join(' | ');
+      }
+      const dt = formatDate(sm.date);
+      const st = formatTime(sm.startTime);
+      const et = sm.endTime ? `–${formatTime(sm.endTime)}` : '';
+      return `${dt} ${st}${et}`;
+    };
+    seminarParticipantsMetaEl.textContent = `${seminar.title || 'Seminar'} — ${buildScheduleSummary(seminar)}`;
     if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = 'Loading...';
     if (preRegStatusEl) preRegStatusEl.textContent = '';
     if (seminarParticipantsListEl) seminarParticipantsListEl.innerHTML = '';
@@ -1684,8 +1699,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Update attendance buttons
       if (seminarHeldBtn) {
-        seminarHeldBtn.disabled = isHeld;
-        seminarHeldBtn.textContent = isHeld ? 'Seminar Already Held' : 'Seminar Held';
+        seminarHeldBtn.disabled = false;
+        seminarHeldBtn.textContent = isHeld ? 'Unmark Held' : 'Mark as Held';
       }
       if (markAttendanceBtn) markAttendanceBtn.disabled = !isHeld;
       if (sendCertificatesBtn) sendCertificatesBtn.disabled = !isHeld || !attendanceModalState.attendanceSaved;
@@ -1738,6 +1753,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
 
             <div class="muted small">${escapeHtml(formatDate(seminar.date))} - ${escapeHtml(formatTime(seminar.startTime))}</div>
+            ${seminar.location ? `<div class="muted small">Location: ${escapeHtml(seminar.location)}</div>` : ''}
             ${Array.isArray(seminar.sessions) && seminar.sessions.length > 1
               ? `<div class="muted small" style="color:var(--xu-blue); font-weight:600;">${seminar.sessions.length} sessions &bull; ${seminar.multiSessionType === 'pick-one' ? 'Pick one day' : 'Attend all'}</div>${buildAdminSessionsScheduleBlock(seminar.sessions, {
                   label: seminar.multiSessionType === 'pick-one' ? 'All session options' : 'Every session',
@@ -1747,11 +1763,14 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="muted small">Reserved: ${escapeHtml(registeredCount)}/${escapeHtml(capacity)}</div>
             <div class="muted small">Status: ${escapeHtml(heldLabel)} ${autoSendLabel ? `• <span style="color:#059669;">${escapeHtml(autoSendLabel)}</span>` : ''}</div>
             <div style="height:1px; background:var(--border); margin:0.1rem 0 0.2rem;"></div>
-            <div class="muted" style="font-size: 0.92rem; line-height:1.4;">${escapeHtml(seminar.description || '')}</div>
+            <div class="seminar-desc-wrap" data-desc-wrap>
+              <div class="muted seminar-desc-clamp" data-desc-text style="font-size: 0.92rem; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">${escapeHtml(seminar.description || '')}</div>
+              ${(seminar.description || '').length > 140 ? `<button type="button" class="link-btn" data-desc-toggle style="background:none; border:none; color:var(--xu-blue); padding:0; margin-top:0.2rem; cursor:pointer; font-size:0.82rem; font-weight:600;">View more</button>` : ''}
+            </div>
 
             <div style="${actionGroupStyle}">
               <button class="btn secondary" type="button" data-seminar-view="${seminar._id}" style="${wideButtonStyle}">View Participants</button>
-              <button class="btn secondary" type="button" data-seminar-held="${seminar._id}" ${seminar.isHeld ? 'disabled' : ''} style="${wideButtonStyle}">${seminar.isHeld ? 'Held' : 'Seminar Held'}</button>
+              <button class="btn secondary" type="button" data-seminar-held="${seminar._id}" style="${wideButtonStyle}">${seminar.isHeld ? 'Unmark Held' : 'Mark as Held'}</button>
               <button class="btn" type="button" data-seminar-edit="${seminar._id}" style="${shortButtonStyle}">Edit</button>
               <button class="btn secondary" type="button" data-seminar-delete="${seminar._id}" style="${shortButtonStyle}">Delete</button>
             </div>
@@ -1781,14 +1800,37 @@ document.addEventListener('DOMContentLoaded', () => {
         const seminar = currentSeminars.find((item) => String(item._id) === String(button.getAttribute('data-seminar-held')));
         if (!seminar) return;
         try {
-          const res = await authedFetch(`/api/admin/seminars/${seminar._id}/held`, { method: 'POST' });
+          const targetHeld = !seminar.isHeld;
+          const res = await authedFetch(`/api/admin/seminars/${seminar._id}/held`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isHeld: targetHeld }),
+          });
           const data = await res.json();
-          if (!res.ok) throw new Error(data?.message || 'Failed to mark seminar as held');
-          if (seminarsStatusEl) seminarsStatusEl.textContent = data?.message || 'Seminar marked as held.';
+          if (!res.ok) throw new Error(data?.message || 'Failed to update held status');
+          if (seminarsStatusEl) seminarsStatusEl.textContent = data?.message || 'Held status updated.';
           await loadSeminars();
         } catch (err) {
-          console.error('[admin] mark seminar as held failed (list)', err);
-          if (seminarsStatusEl) seminarsStatusEl.textContent = err.message || 'Failed to mark seminar as held.';
+          console.error('[admin] toggle seminar held failed (list)', err);
+          if (seminarsStatusEl) seminarsStatusEl.textContent = err.message || 'Failed to update held status.';
+        }
+      });
+    });
+
+    seminarsCarouselEl.querySelectorAll('[data-desc-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const wrap = button.closest('[data-desc-wrap]');
+        const text = wrap?.querySelector('[data-desc-text]');
+        if (!text) return;
+        const expanded = text.classList.toggle('seminar-desc-expanded');
+        if (expanded) {
+          text.style.webkitLineClamp = 'unset';
+          text.style.display = 'block';
+          button.textContent = 'View less';
+        } else {
+          text.style.display = '-webkit-box';
+          text.style.webkitLineClamp = '3';
+          button.textContent = 'View more';
         }
       });
     });
@@ -2394,16 +2436,21 @@ document.addEventListener('DOMContentLoaded', () => {
   seminarHeldBtn?.addEventListener('click', async () => {
     if (!attendanceModalState.seminarId) return;
     try {
-      const res = await authedFetch(`/api/admin/seminars/${attendanceModalState.seminarId}/held`, { method: 'POST' });
+      const targetHeld = !attendanceModalState.isHeld;
+      const res = await authedFetch(`/api/admin/seminars/${attendanceModalState.seminarId}/held`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isHeld: targetHeld }),
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || 'Failed to mark seminar as held');
-      if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = data?.message || 'Seminar marked as held.';
+      if (!res.ok) throw new Error(data?.message || 'Failed to update held status');
+      if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = data?.message || 'Held status updated.';
       await loadSeminars();
       const seminar = currentSeminars.find((item) => String(item._id) === String(attendanceModalState.seminarId));
       if (seminar) await openParticipantsModal(seminar);
     } catch (err) {
-      console.error('[admin] mark seminar as held failed (participants)', err);
-      if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = err.message || 'Failed to mark seminar as held.';
+      console.error('[admin] toggle seminar held failed (participants)', err);
+      if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = err.message || 'Failed to update held status.';
     }
   });
 

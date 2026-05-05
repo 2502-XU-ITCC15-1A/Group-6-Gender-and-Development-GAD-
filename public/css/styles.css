@@ -1747,3 +1747,45 @@ textarea.is-invalid {
   color: var(--xu-blue);
   border-color: rgba(32, 58, 115, 0.2);
 }
+
+/* Seminars container view modes (employee + admin) */
+#upcoming-carousel.view-swipe {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  scroll-snap-type: x mandatory;
+}
+#upcoming-carousel.view-swipe > .card,
+#upcoming-carousel.view-swipe > article {
+  flex: 0 0 320px;
+  min-width: 320px;
+  scroll-snap-align: start;
+}
+#upcoming-carousel.view-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+#upcoming-carousel.view-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+#upcoming-carousel.view-list > .card,
+#upcoming-carousel.view-list > article {
+  width: 100%;
+}
+
+/* Description clamp helper */
+.seminar-desc-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.seminar-desc-expanded {
+  display: block !important;
+  -webkit-line-clamp: unset !important;
+}

@@ -50,8 +50,21 @@ router.post('/send-pin', async (req, res, next) => {
         .json({ message: 'This email is already registered. Please sign in instead or use “Forgot password?”.' });
     }
 
+    const cooldownMs = 5 * 60 * 1000;
+    const recent = await PinVerification.findOne({
+      email: normalizedEmail,
+      createdAt: { $gt: new Date(Date.now() - cooldownMs) },
+    }).sort({ createdAt: -1 });
+    if (recent) {
+      const retryAfter = Math.ceil((recent.createdAt.getTime() + cooldownMs - Date.now()) / 1000);
+      return res.status(429).json({
+        message: `Please wait ${Math.ceil(retryAfter / 60)} minute(s) before requesting another PIN.`,
+        retryAfter,
+      });
+    }
+
     const code = generatePin();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + cooldownMs);
 
     await PinVerification.create({
       email: normalizedEmail,
@@ -90,8 +103,21 @@ router.post('/forgot-password/request', async (req, res, next) => {
       return res.status(403).json({ message: 'This account is deactivated. Please contact the GAD office.' });
     }
 
+    const cooldownMs = 5 * 60 * 1000;
+    const recent = await PasswordReset.findOne({
+      email: normalizedEmail,
+      createdAt: { $gt: new Date(Date.now() - cooldownMs) },
+    }).sort({ createdAt: -1 });
+    if (recent) {
+      const retryAfter = Math.ceil((recent.createdAt.getTime() + cooldownMs - Date.now()) / 1000);
+      return res.status(429).json({
+        message: `Please wait ${Math.ceil(retryAfter / 60)} minute(s) before requesting another PIN.`,
+        retryAfter,
+      });
+    }
+
     const code = generatePin();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + cooldownMs);
 
     await PasswordReset.create({
       email: normalizedEmail,

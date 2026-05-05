@@ -1569,9 +1569,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const todayStr = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     if (el.complianceUpdatedAt) el.complianceUpdatedAt.textContent = `Status as of ${todayStr}`;
 
-    if (isCompliant) {
+    let stageLabel;
+    if (completedSeminars >= 5) stageLabel = 'Compliant';
+    else if (completedSeminars >= 3) stageLabel = 'Almost There';
+    else stageLabel = 'Pre-register Now';
+
+    const stageIsCompliant = stageLabel === 'Compliant';
+
+    if (stageIsCompliant) {
       if (el.complianceStatusBadge) {
-        el.complianceStatusBadge.textContent = 'Compliant';
+        el.complianceStatusBadge.textContent = stageLabel;
         el.complianceStatusBadge.style.background = 'rgba(16,185,129,0.10)';
         el.complianceStatusBadge.style.color = '#059669';
         el.complianceStatusBadge.style.borderColor = 'rgba(16,185,129,0.25)';
@@ -1580,13 +1587,13 @@ document.addEventListener('DOMContentLoaded', () => {
         el.complianceAdviceBox.style.borderColor = 'rgba(16,185,129,0.22)';
         el.complianceAdviceBox.style.background = 'rgba(16,185,129,0.08)';
       }
-      if (el.complianceAdviceHeader) el.complianceAdviceHeader.textContent = 'All Requirements Completed!';
+      if (el.complianceAdviceHeader) el.complianceAdviceHeader.textContent = 'Compliant';
       if (el.complianceAdviceText) {
-        el.complianceAdviceText.textContent = 'You have successfully completed all required GAD seminars.';
+        el.complianceAdviceText.textContent = 'You have successfully completed your required GAD seminars.';
       }
     } else {
       if (el.complianceStatusBadge) {
-        el.complianceStatusBadge.textContent = 'Incomplete';
+        el.complianceStatusBadge.textContent = stageLabel;
         el.complianceStatusBadge.style.background = 'rgba(239,68,68,0.10)';
         el.complianceStatusBadge.style.color = '#dc2626';
         el.complianceStatusBadge.style.borderColor = 'rgba(239,68,68,0.25)';
@@ -1595,13 +1602,14 @@ document.addEventListener('DOMContentLoaded', () => {
         el.complianceAdviceBox.style.borderColor = 'rgba(239,68,68,0.22)';
         el.complianceAdviceBox.style.background = 'rgba(239,68,68,0.08)';
       }
-      if (el.complianceAdviceHeader) el.complianceAdviceHeader.textContent = 'You Are Almost There';
+      if (el.complianceAdviceHeader) el.complianceAdviceHeader.textContent = stageLabel;
       if (el.complianceAdviceText) {
-        const remaining = requiredSeminars - completedSeminars;
+        const toAlmost = Math.max(0, 3 - completedSeminars);
+        const toCompliant = Math.max(0, 5 - completedSeminars);
         el.complianceAdviceText.textContent =
-          remaining > 0
-            ? `You still need ${remaining} seminar(s) to complete your requirement.`
-            : 'Keep going—your progress will be updated soon.';
+          stageLabel === 'Pre-register Now'
+            ? `Pre-register for ${toAlmost} more seminar(s) to reach "Almost There".`
+            : `Complete ${toCompliant} more seminar(s) to become Compliant.`;
       }
     }
 

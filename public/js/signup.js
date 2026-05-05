@@ -414,10 +414,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const payload = {
-      firstName: /** @type {HTMLInputElement} */ (firstNameInput).value.trim(),
-      lastName: /** @type {HTMLInputElement} */ (lastNameInput).value.trim(),
-      department: /** @type {HTMLInputElement} */ (departmentInput).value.trim(),
-      position: /** @type {HTMLInputElement} */ (positionInput).value.trim(),
+      firstName: /** @type {HTMLInputElement} */ (firstNameInput).value.trim().toUpperCase(),
+      lastName: /** @type {HTMLInputElement} */ (lastNameInput).value.trim().toUpperCase(),
+      department: /** @type {HTMLInputElement} */ (departmentInput).value.trim().toUpperCase(),
+      position: /** @type {HTMLInputElement} */ (positionInput).value.trim().toUpperCase(),
       birthSex: birthSexInput ? /** @type {HTMLInputElement} */ (birthSexInput).value.trim() : '',
       genderIdentity: (() => {
         const raw = genderIdentityInput ? /** @type {HTMLInputElement} */ (genderIdentityInput).value.trim() : '';
