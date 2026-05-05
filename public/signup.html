@@ -237,12 +237,33 @@
             </label>
             <div class="row">
               <label>
-                Assigned Birth Sex <span class="required-asterisk">*</span>
-                <input type="text" id="signup-birth-sex" name="birthSex" required placeholder="Male or Female" />
+                Sex Assigned at Birth <span class="required-asterisk">*</span>
+                <select id="signup-birth-sex" name="birthSex" required>
+                  <option value="">Select...</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Intersex">Intersex</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
               </label>
               <label>
                 Gender Identity (optional)
-                <input type="text" id="signup-gender-identity" name="genderIdentity" />
+                <select id="signup-gender-identity" name="genderIdentity">
+                  <option value="">Select...</option>
+                  <option value="Man">Man</option>
+                  <option value="Woman">Woman</option>
+                  <option value="Non-binary">Non-binary</option>
+                  <option value="Transgender Man">Transgender Man</option>
+                  <option value="Transgender Woman">Transgender Woman</option>
+                  <option value="Prefer to self-describe">Prefer to self-describe</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </label>
+            </div>
+            <div class="row" id="signup-gender-self-describe-row" style="display:none;">
+              <label style="flex:1 1 100%;">
+                Please self-describe your gender identity
+                <input type="text" id="signup-gender-self-describe" name="genderSelfDescribe" placeholder="Self-describe" />
               </label>
             </div>
 

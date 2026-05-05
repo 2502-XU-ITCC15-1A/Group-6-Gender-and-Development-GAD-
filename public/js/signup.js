@@ -160,6 +160,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const passwordInput = document.getElementById('signup-password');
   const birthSexInput = document.getElementById('signup-birth-sex');
   const genderIdentityInput = document.getElementById('signup-gender-identity');
+  const genderSelfDescribeInput = document.getElementById('signup-gender-self-describe');
+  const genderSelfDescribeRow = document.getElementById('signup-gender-self-describe-row');
+
+  const updateGenderSelfDescribeVisibility = () => {
+    if (!genderIdentityInput || !genderSelfDescribeRow) return;
+    const show = genderIdentityInput.value === 'Prefer to self-describe';
+    genderSelfDescribeRow.style.display = show ? '' : 'none';
+    if (!show && genderSelfDescribeInput) genderSelfDescribeInput.value = '';
+  };
+  genderIdentityInput?.addEventListener('change', updateGenderSelfDescribeVisibility);
   const submitBtn = document.getElementById('signup-submit-btn');
   const cancelBtn = document.getElementById('signup-cancel-btn');
 
@@ -236,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
     passwordInput,
     birthSexInput,
     genderIdentityInput,
+    genderSelfDescribeInput,
     submitBtn,
   ].filter(Boolean);
 
@@ -398,9 +409,16 @@ document.addEventListener('DOMContentLoaded', () => {
       department: /** @type {HTMLInputElement} */ (departmentInput).value.trim(),
       position: /** @type {HTMLInputElement} */ (positionInput).value.trim(),
       birthSex: birthSexInput ? /** @type {HTMLInputElement} */ (birthSexInput).value.trim() : '',
-      genderIdentity: genderIdentityInput
-        ? /** @type {HTMLInputElement} */ (genderIdentityInput).value.trim()
-        : '',
+      genderIdentity: (() => {
+        const raw = genderIdentityInput ? /** @type {HTMLInputElement} */ (genderIdentityInput).value.trim() : '';
+        if (raw === 'Prefer to self-describe') {
+          const selfDesc = genderSelfDescribeInput
+            ? /** @type {HTMLInputElement} */ (genderSelfDescribeInput).value.trim()
+            : '';
+          return selfDesc ? `Self-described: ${selfDesc}` : 'Prefer to self-describe';
+        }
+        return raw;
+      })(),
     };
 
     if (!googleProfileToken) {
@@ -502,6 +520,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (passwordInput) /** @type {HTMLInputElement} */ (passwordInput).value = '';
     if (birthSexInput) /** @type {HTMLInputElement} */ (birthSexInput).value = '';
     if (genderIdentityInput) /** @type {HTMLInputElement} */ (genderIdentityInput).value = '';
+    if (genderSelfDescribeInput) /** @type {HTMLInputElement} */ (genderSelfDescribeInput).value = '';
+    updateGenderSelfDescribeVisibility();
   });
 });
 
