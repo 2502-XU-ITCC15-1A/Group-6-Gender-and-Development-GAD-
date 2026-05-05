@@ -1,3 +1,10 @@
+window.addEventListener('error', (event) => {
+  console.error('[employee-dashboard] uncaught error', event.error || event.message, event.filename, event.lineno);
+});
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[employee-dashboard] unhandled promise rejection', event.reason);
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   /** @type {string|null} */
   let token = window.localStorage.getItem('gims_employee_token');
@@ -769,6 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             }
           } catch (err) {
+            console.error('[employee-dashboard] load seminar materials failed', err);
             if (listEl) listEl.innerHTML = `<span>${escapeHtml(err.message || 'Failed to load materials.')}</span>`;
             loaded = false;
           }
@@ -860,6 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadDashboard();
       }, 1500);
     } catch (err) {
+      console.error('[employee-dashboard] submit evaluation failed', err);
       if (el.evalModalStatus) el.evalModalStatus.textContent = err.message || 'Submission failed.';
       if (el.evalSubmitBtn) el.evalSubmitBtn.disabled = false;
     }
@@ -1026,6 +1035,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadDashboard();
       }, 1800);
     } catch (err) {
+      console.error('[employee-dashboard] pre-registration failed', err);
       el.joinStatus.textContent = err.message || 'Pre-registration failed.';
       el.joinConfirmBtn.disabled = false;
     }
@@ -1154,6 +1164,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       if (el.attendedCertStatus) el.attendedCertStatus.textContent = '';
     } catch (err) {
+      console.error('[employee-dashboard] certificate download failed', err);
       if (el.attendedCertStatus) el.attendedCertStatus.textContent = err.message || 'Download failed.';
     }
   };
@@ -1296,6 +1307,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initial load
   loadDashboard().catch((err) => {
+    console.error('[employee-dashboard] loadDashboard failed', err);
     if (String(err?.message || '').toLowerCase().includes('not authenticated')) {
       window.localStorage.removeItem('gims_employee_token');
       window.localStorage.removeItem('gims_role');

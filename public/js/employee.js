@@ -1,3 +1,10 @@
+window.addEventListener('error', (event) => {
+  console.error('[employee] uncaught error', event.error || event.message, event.filename, event.lineno);
+});
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[employee] unhandled promise rejection', event.reason);
+});
+
 let employeeToken = null;
 
 // In this version, the employee token is expected to be supplied by the
@@ -72,6 +79,7 @@ profileBtn?.addEventListener('click', async () => {
 
     profileStatusEl.textContent = '';
   } catch (err) {
+    console.error('[employee] load profile failed', err);
     profileStatusEl.textContent = err.message;
   }
 });
@@ -126,6 +134,7 @@ saveProfileBtn?.addEventListener('click', async () => {
     saveProfileBtn.style.display = 'none';
     profileStatusEl.textContent = 'Profile updated.';
   } catch (err) {
+    console.error('[employee] save profile failed', err);
     profileStatusEl.textContent = err.message;
   }
 });
@@ -181,11 +190,13 @@ seminarsBtn?.addEventListener('click', async () => {
           seminarsStatusEl.textContent = data2.message || 'You have successfully registered for this seminar.';
           seminarsBtn.click();
         } catch (err) {
+          console.error('[employee] register for seminar failed', err);
           seminarsStatusEl.textContent = err.message;
         }
       });
     });
   } catch (err) {
+    console.error('[employee] load seminars failed', err);
     seminarsStatusEl.textContent = err.message;
   }
 });
@@ -218,6 +229,7 @@ materialsBtn?.addEventListener('click', async () => {
 
     materialsList.innerHTML = items;
   } catch (err) {
+    console.error('[employee] load materials failed', err);
     materialsStatusEl.textContent = err.message;
   }
 });
@@ -251,6 +263,7 @@ registrationsBtn?.addEventListener('click', async () => {
 
     registrationsList.innerHTML = rows;
   } catch (err) {
+    console.error('[employee] load registrations failed', err);
     registrationsStatusEl.textContent = err.message;
   }
 });
@@ -322,6 +335,7 @@ const renderArticles = (articles) => {
         });
         articlesStatus.textContent = '';
       } catch (err) {
+        console.error('[employee] load article failed', err);
         articlesStatus.textContent = `Load failed: ${err.message}`;
       }
     });
@@ -340,6 +354,7 @@ loadArticlesBtn?.addEventListener('click', async () => {
     if (!res.ok) throw new Error(data?.message || 'Failed to load updates');
     renderArticles(data);
   } catch (err) {
+    console.error('[employee] load articles list failed', err);
     articlesStatus.textContent = `Load failed: ${err.message}`;
   }
 });

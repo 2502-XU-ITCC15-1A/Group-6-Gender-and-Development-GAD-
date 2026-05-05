@@ -1,3 +1,10 @@
+window.addEventListener('error', (event) => {
+  console.error('[signup] uncaught error', event.error || event.message, event.filename, event.lineno);
+});
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[signup] unhandled promise rejection', event.reason);
+});
+
 window.handleSignupGoogleCredential = async (response) => {
   const banner = document.getElementById('signup-google-banner');
   const completeStatusEl = document.getElementById('signup-complete-status');
@@ -32,6 +39,7 @@ window.handleSignupGoogleCredential = async (response) => {
       window.location.href = body.role === 'admin' ? '/admin.html' : '/employee.html';
     }, 700);
   } catch (err) {
+    console.error('[signup] google sign-in failed', err);
     if (completeStatusEl) completeStatusEl.textContent = err.message || 'Google sign-in failed.';
   }
 };
@@ -347,6 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
       emailStatusEl.textContent = 'Verification PIN sent. Please check your XU inbox.';
       verifiedEmail = value;
     } catch (err) {
+      console.error('[signup] send PIN failed', err);
       emailStatusEl.textContent = err.message || 'Failed to send PIN.';
     } finally {
       sendPinBtn.disabled = false;
@@ -387,6 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
       pinStatusEl.textContent = 'PIN verified. You may now complete your profile.';
       setProfileEnabled(true);
     } catch (err) {
+      console.error('[signup] verify PIN failed', err);
       pinStatusEl.textContent = err.message || 'Invalid or expired PIN.';
     } finally {
       verifyPinBtn.disabled = false;
@@ -492,6 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = '/employee.html';
       }, 1200);
     } catch (err) {
+      console.error('[signup] create account failed', err);
       const msg = err.message || 'Failed to create account.';
       completeStatusEl.textContent = msg;
       showErrorPopup(msg);

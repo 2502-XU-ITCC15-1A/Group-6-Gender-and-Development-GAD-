@@ -1,3 +1,10 @@
+window.addEventListener('error', (event) => {
+  console.error('[login] uncaught error', event.error || event.message, event.filename, event.lineno);
+});
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[login] unhandled promise rejection', event.reason);
+});
+
 const _EYE = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const _EYE_OFF = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 
@@ -32,6 +39,7 @@ window.handleGoogleCredential = async (response) => {
       window.location.href = body.role === 'admin' ? '/admin.html' : '/employee.html';
     }, 700);
   } catch (err) {
+    console.error('[login] google sign-in failed', err);
     if (statusEl) statusEl.textContent = err.message || 'Google sign-in failed.';
   }
 };
@@ -214,6 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) throw new Error(body?.message || 'Failed to send reset PIN.');
       if (forgotStatusEl) forgotStatusEl.textContent = body?.message || 'Reset PIN sent. Check your email.';
     } catch (err) {
+      console.error('[login] forgot password: send PIN failed', err);
       if (forgotStatusEl) forgotStatusEl.textContent = err.message || 'Failed to send reset PIN.';
     } finally {
       forgotRequestBtn.disabled = false;
@@ -245,6 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
       forgotResetToken = body?.token || null;
       if (forgotStatusEl) forgotStatusEl.textContent = 'PIN verified. You can now set a new password.';
     } catch (err) {
+      console.error('[login] forgot password: verify PIN failed', err);
       if (forgotStatusEl) forgotStatusEl.textContent = err.message || 'PIN verification failed.';
     } finally {
       forgotVerifyBtn.disabled = false;
@@ -287,6 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
         closeForgotModal();
       }, 900);
     } catch (err) {
+      console.error('[login] forgot password: confirm reset failed', err);
       if (forgotStatusEl) forgotStatusEl.textContent = err.message || 'Password reset failed.';
     } finally {
       forgotConfirmBtn.disabled = false;
@@ -368,6 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clearStatus(lpPinStatus);
         showStep('pin');
       } catch (err) {
+        console.error('[login] login-page forgot: send PIN failed', err);
         if (lpFpStatus) lpFpStatus.textContent = err.message;
       } finally {
         if (lpSendBtn) lpSendBtn.disabled = false;
@@ -398,6 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clearStatus(lpNewpwStatus);
         showStep('newpw');
       } catch (err) {
+        console.error('[login] login-page forgot: verify PIN failed', err);
         if (lpPinStatus) lpPinStatus.textContent = err.message;
       } finally {
         if (lpVerifyBtn) lpVerifyBtn.disabled = false;
@@ -434,6 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showStep('login');
         }, 1800);
       } catch (err) {
+        console.error('[login] login-page forgot: confirm reset failed', err);
         if (lpNewpwStatus) lpNewpwStatus.textContent = err.message;
       } finally {
         if (lpConfirmBtn) lpConfirmBtn.disabled = false;
@@ -510,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }, 900);
     } catch (err) {
+      console.error('[login] login submit failed', err);
       statusEl.textContent = err.message || 'Login failed.';
       statusEl.classList.add('is-error');
       const msg = String(err.message || '').toLowerCase();
