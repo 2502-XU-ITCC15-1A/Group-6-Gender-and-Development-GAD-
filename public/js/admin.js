@@ -2054,35 +2054,104 @@ document.addEventListener('DOMContentLoaded', () => {
     compliantEmployeesEl.textContent = String(data.compliant ?? 0);
   };
 
-  const seminarsNotifDotEl = document.getElementById('admin-seminars-notif-dot');
-  const seminarsNotifSrEl = document.getElementById('admin-seminars-notif-sr');
-  const updateSeminarsNotificationDot = async () => {
-    if (!seminarsNotifDotEl) return;
+  const notifBellBtn = document.getElementById('admin-notif-bell-btn');
+  const notifBellWrapper = document.getElementById('admin-notif-bell-wrapper');
+  const notifBadgeEl = document.getElementById('admin-notif-badge');
+  const notifDropdownEl = document.getElementById('admin-notif-dropdown');
+  const notifListEl = document.getElementById('admin-notif-list');
+  const notifRefreshBtn = document.getElementById('admin-notif-refresh-btn');
+
+  const formatNotifTime = (date) => {
+    if (!date) return '';
+    const then = new Date(date).getTime();
+    if (Number.isNaN(then)) return '';
+    const diffMs = Date.now() - then;
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return new Date(date).toLocaleDateString();
+  };
+
+  const renderAdminNotifications = (items) => {
+    if (!notifListEl) return;
+    if (!Array.isArray(items) || items.length === 0) {
+      notifListEl.innerHTML = '<div class="notif-empty">No notifications yet.</div>';
+      return;
+    }
+    const iconFor = (type) => {
+      if (type === 'pre-registration') return '<i class="fa-solid fa-user-plus" style="color:#b45309;"></i>';
+      if (type === 'evaluation') return '<i class="fa-solid fa-clipboard-check" style="color:#059669;"></i>';
+      return '<i class="fa-solid fa-bell" style="color:var(--xu-blue);"></i>';
+    };
+    notifListEl.innerHTML = items
+      .map((n) => `
+        <div class="notif-item unread" data-seminar-id="${escapeHtml(String(n.seminarId || ''))}" data-notif-type="${escapeHtml(String(n.type || ''))}">
+          <span class="notif-icon">${iconFor(n.type)}</span>
+          <div class="notif-item-body">
+            <div class="notif-item-msg">${escapeHtml(n.message)}</div>
+            <div class="notif-item-time">${escapeHtml(formatNotifTime(n.timestamp))}</div>
+          </div>
+        </div>
+      `)
+      .join('');
+
+    notifListEl.querySelectorAll('.notif-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        notifDropdownEl?.classList.remove('is-open');
+        showNavModule('seminars');
+      });
+    });
+  };
+
+  const updateAdminNotificationBell = async () => {
+    if (!notifBadgeEl) return;
     try {
-      const res = await authedFetch('/api/admin/notifications/summary');
+      const res = await authedFetch('/api/admin/notifications/bell');
       if (!res.ok) return;
       const data = await res.json();
-      const summary = data?.seminars || {};
-      const total = Number(summary.total || 0);
-      if (total > 0) {
-        seminarsNotifDotEl.hidden = false;
-        if (total > 1) seminarsNotifDotEl.setAttribute('data-count', total > 99 ? '99+' : String(total));
-        else seminarsNotifDotEl.removeAttribute('data-count');
-        if (seminarsNotifSrEl) {
-          const parts = [];
-          if (summary.pendingApprovals) parts.push(`${summary.pendingApprovals} pending approval${summary.pendingApprovals === 1 ? '' : 's'}`);
-          if (summary.pendingFinalization) parts.push(`${summary.pendingFinalization} seminar${summary.pendingFinalization === 1 ? '' : 's'} ready to finalize`);
-          seminarsNotifSrEl.textContent = parts.length ? `(${parts.join(', ')})` : '';
-        }
+      const items = Array.isArray(data?.items) ? data.items : [];
+      const unread = Number(data?.unreadCount || items.length || 0);
+
+      renderAdminNotifications(items);
+
+      if (unread > 0) {
+        notifBadgeEl.textContent = unread > 99 ? '99+' : String(unread);
+        notifBadgeEl.style.display = 'flex';
       } else {
-        seminarsNotifDotEl.hidden = true;
-        seminarsNotifDotEl.removeAttribute('data-count');
-        if (seminarsNotifSrEl) seminarsNotifSrEl.textContent = '';
+        notifBadgeEl.style.display = 'none';
       }
     } catch {
-      // Silent — the dot is non-critical UI.
+      // Silent — the bell is non-critical UI.
     }
   };
+
+  // Backwards-compatible alias used elsewhere in this file. The prior sidebar
+  // dot was removed, but other callsites still invoke this name to refresh
+  // notification state after seminar mutations.
+  const updateSeminarsNotificationDot = updateAdminNotificationBell;
+
+  notifBellBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!notifDropdownEl) return;
+    const isOpen = notifDropdownEl.classList.contains('is-open');
+    notifDropdownEl.classList.toggle('is-open', !isOpen);
+    if (!isOpen) updateAdminNotificationBell();
+  });
+
+  notifRefreshBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    updateAdminNotificationBell();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (notifBellWrapper && !notifBellWrapper.contains(e.target)) {
+      notifDropdownEl?.classList.remove('is-open');
+    }
+  });
 
   const loadAll = async () => {
     await loadSummary();
