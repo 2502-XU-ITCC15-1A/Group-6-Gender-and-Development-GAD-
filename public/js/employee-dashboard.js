@@ -83,6 +83,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     attendedSeminarsList: document.getElementById('attended-seminars-list'),
     attendedCertStatus: document.getElementById('attended-cert-status'),
+    attendedViewSwipe: document.getElementById('employee-attended-view-swipe'),
+    attendedViewGrid: document.getElementById('employee-attended-view-grid'),
+    attendedViewList: document.getElementById('employee-attended-view-list'),
+    attendedSortBtn: document.getElementById('employee-attended-sort-btn'),
+    attendedPrev: document.getElementById('employee-attended-prev'),
+    attendedNext: document.getElementById('employee-attended-next'),
 
     // Notification elements
     notifBellBtn: document.getElementById('notif-bell-btn'),
@@ -165,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const minutes = match[2];
     const period = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12 || 12;
-    return `${hours}:${minutes} ${period}`;
+    return `${hours}:${minutes}\u00A0${period}`;
   };
 
   const formatSeminarDate = (date) => {
@@ -175,6 +181,27 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch {
       return String(date);
     }
+  };
+
+  /** Compact list of every session (date • time) for multi-day seminars; optional highlight for pick-one / chosen day. */
+  const buildSessionsScheduleBlock = (sessions, opts = {}) => {
+    if (!Array.isArray(sessions) || sessions.length <= 1) return '';
+    const highlightId = opts.highlightSessionId != null ? String(opts.highlightSessionId) : '';
+    const label = opts.label || 'All sessions';
+    const items = sessions.map((sess, idx) => {
+      const sid = String(sess._id || sess.id || '');
+      const line = `Day ${idx + 1}: ${formatSeminarDate(sess.date)} • ${formatTime(sess.startTime)}`;
+      const isHi = highlightId && sid === highlightId;
+      const weight = isHi ? '650' : '400';
+      const opacity = isHi ? '1' : '0.9';
+      const tag = isHi ? ' <span style="font-size:0.62rem; font-weight:500;">(this session)</span>' : '';
+      return `<div class="muted small" style="font-size:0.68rem; margin-top:0.14rem; line-height:1.25; font-weight:${weight}; opacity:${opacity}; letter-spacing:-0.01em;">${escapeHtml(line)}${tag}</div>`;
+    });
+    return `
+      <div class="seminar-sessions-schedule" style="margin-top:0.4rem; padding-top:0.4rem; border-top:1px solid rgba(15,23,42,0.08);">
+        <div class="muted small" style="font-size:0.65rem; font-weight:600; letter-spacing:0.015em; opacity:0.8;">${escapeHtml(label)}</div>
+        ${items.join('')}
+      </div>`;
   };
 
   const truncate = (text, max = 120) => {
@@ -325,7 +352,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!dropdown) return;
     const isOpen = dropdown.classList.contains('is-open');
     dropdown.classList.toggle('is-open', !isOpen);
-    if (!isOpen) loadNotifications();
+    if (!isOpen) {
+      loadNotifications();
+      loadDashboard().catch(() => {});
+    }
   });
 
   // Mark all read
@@ -361,10 +391,34 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       el.seminarTabs.querySelectorAll('.seminar-tab-btn').forEach((b) => b.classList.remove('is-active'));
       btn.classList.add('is-active');
-      currentSeminarTab = btn.getAttribute('data-tab') || 'open';
-      applySeminarFilter();
+      const nextTab = btn.getAttribute('data-tab') || 'open';
+      currentSeminarTab = nextTab;
+      // Registration lists come from /dashboard; refresh when opening these tabs so approvals show up without a full reload.
+      if (nextTab === 'registered' || nextTab === 'pre-registered') {
+        loadDashboard().catch(() => {});
+      } else {
+        applySeminarFilter();
+      }
     });
   });
+
+  const parseTimeForScheduleSort = (value) => {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+    if (!match) return 0;
+    return Number(match[1]) * 60 + Number(match[2]);
+  };
+
+  const registrationScheduleSortKey = (r) => {
+    const s = r?.seminar;
+    if (!s) return 0;
+    if (r.chosenSessionId && Array.isArray(s.sessions)) {
+      const sess = s.sessions.find((x) => String(x._id || x.id || '') === String(r.chosenSessionId));
+      if (sess?.date) {
+        return new Date(sess.date).getTime() + parseTimeForScheduleSort(sess.startTime);
+      }
+    }
+    return new Date(s.date || 0).getTime() + parseTimeForScheduleSort(s.startTime);
+  };
 
   const applySeminarFilter = () => {
     if (!currentDashboardData) return;
@@ -376,11 +430,22 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    if (currentSeminarTab === 'registered') {
+      const rows = Array.isArray(currentDashboardData.registeredSeminars) ? currentDashboardData.registeredSeminars : [];
+      const sorted = [...rows].sort((a, b) => registrationScheduleSortKey(a) - registrationScheduleSortKey(b));
+      renderRegisteredSeminars(sorted);
+      return;
+    }
+
     const allSeminars = Array.isArray(currentDashboardData.upcomingSeminars) ? currentDashboardData.upcomingSeminars : [];
 
     // Get IDs of seminars already registered in any status
     const allRegIds = new Set();
-    const allRegs = [...(currentDashboardData.preRegistered || []), ...(currentDashboardData.attendedSeminars || [])];
+    const allRegs = [
+      ...(currentDashboardData.preRegistered || []),
+      ...(currentDashboardData.registeredSeminars || []),
+      ...(currentDashboardData.attendedSeminars || []),
+    ];
     allRegs.forEach((r) => {
       if (r.seminar?.id) allRegIds.add(String(r.seminar.id));
     });
@@ -416,8 +481,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ? 'No mandatory seminars found.'
             : 'No open seminars found.';
       }
-    } else {
-      if (el.upcomingStatus) el.upcomingStatus.textContent = '';
+    } else if (el.upcomingStatus) {
+      el.upcomingStatus.textContent = '';
     }
   };
 
@@ -469,6 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   <div class="muted small" style="font-size:0.78rem; margin-top:0.1rem; opacity:0.72;">
                     <i class="fa-solid fa-calendar-days" style="margin-right:0.25rem;"></i>Series: ${escapeHtml(seriesRange)}
                   </div>
+                  ${buildSessionsScheduleBlock(s.sessions, { highlightSessionId: sessionId, label: 'All session options' })}
                 </div>
               </div>
 
@@ -512,11 +578,15 @@ document.addEventListener('DOMContentLoaded', () => {
         let dateDisplay = `${escapeHtml(formatSeminarDate(s.date))} &bull; ${escapeHtml(formatTime(s.startTime))}`;
         let seriesLine = '';
         let multiDayBadge = '';
+        const sessionsScheduleHtml = allHasMulti
+          ? buildSessionsScheduleBlock(s.sessions, { label: 'Every session (attend all)' })
+          : '';
+
         if (isAll && allHasMulti) {
           const first = formatSeminarDate(s.sessions[0].date);
           const last = formatSeminarDate(s.sessions[s.sessions.length - 1].date);
           dateDisplay = `${escapeHtml(first)} – ${escapeHtml(last)}`;
-          seriesLine = `<div class="muted small" style="font-size:0.78rem; margin-top:0.1rem; opacity:0.72;">All ${s.sessions.length} sessions required &bull; starts ${escapeHtml(formatTime(s.sessions[0].startTime))}</div>`;
+          seriesLine = `<div class="muted small" style="font-size:0.78rem; margin-top:0.1rem; opacity:0.72;">All ${s.sessions.length} sessions required</div>`;
           multiDayBadge = `<div class="badge badge-soft" style="background:rgba(79,70,229,0.08); color:#4338ca; border-color:rgba(79,70,229,0.2);">Multi-Day</div>`;
         }
 
@@ -530,6 +600,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div style="font-weight:600; color: var(--xu-blue);">${escapeHtml(s.title)}</div>
                 <div class="muted small" style="margin-top:0.2rem; font-size:0.83rem;">${dateDisplay}</div>
                 ${seriesLine}
+                ${sessionsScheduleHtml}
               </div>
             </div>
 
@@ -586,7 +657,8 @@ document.addEventListener('DOMContentLoaded', () => {
     el.upcomingCarousel.innerHTML = '';
 
     if (!Array.isArray(preRegistered) || preRegistered.length === 0) {
-      el.upcomingCarousel.innerHTML = `<p class="muted">You have no pre-registered seminars awaiting approval.</p>`;
+      el.upcomingCarousel.innerHTML = `<p class="muted">No seminars found for this filter.</p>`;
+      if (el.upcomingStatus) el.upcomingStatus.textContent = 'No pre-registered seminars found.';
       return;
     }
 
@@ -602,6 +674,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const dayBadge = chosenSess && s.sessions?.length > 1
         ? `<div class="badge badge-soft" style="background:rgba(79,70,229,0.08); color:#4338ca; border-color:rgba(79,70,229,0.2); margin-left:0.35rem;">Day ${chosenIdx + 1} of ${s.sessions.length}</div>`
         : '';
+      const preRegSessionsBlock = buildSessionsScheduleBlock(s.sessions, {
+        highlightSessionId: r.chosenSessionId || undefined,
+        label: 'All sessions',
+      });
 
       return `
         <div class="card seminar-card" style="box-shadow:none; padding: 1rem; min-width: 290px; flex: 0 0 290px; display:flex; flex-direction:column; justify-content:space-between; border-color: rgba(245,158,11,0.3);">
@@ -614,6 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${escapeHtml(s.title)}
               </div>
               <div class="muted small" style="margin-top:0.25rem; font-size:0.82rem;">${displayDate}</div>
+              ${preRegSessionsBlock}
             </div>
           </div>
 
@@ -634,6 +711,69 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ========================
+  // RENDER REGISTERED (approved) SEMINARS
+  // ========================
+
+  const renderRegisteredSeminars = (registeredRows) => {
+    if (!el.upcomingCarousel) return;
+    el.upcomingCarousel.innerHTML = '';
+
+    if (!Array.isArray(registeredRows) || registeredRows.length === 0) {
+      el.upcomingCarousel.innerHTML = `<p class="muted">No seminars found for this filter.</p>`;
+      if (el.upcomingStatus) el.upcomingStatus.textContent = 'No registered seminars found.';
+      return;
+    }
+
+    const cards = registeredRows.map((r) => {
+      const s = r.seminar;
+      const chosenSess = r.chosenSessionId && Array.isArray(s.sessions)
+        ? s.sessions.find((sess) => String(sess._id || sess.id || '') === String(r.chosenSessionId))
+        : null;
+      const displayDate = chosenSess
+        ? `${escapeHtml(formatSeminarDate(chosenSess.date))} &bull; ${escapeHtml(formatTime(chosenSess.startTime))}`
+        : `${escapeHtml(formatSeminarDate(s.date))} &bull; ${escapeHtml(formatTime(s.startTime))}`;
+      const chosenIdx = chosenSess && Array.isArray(s.sessions) ? s.sessions.indexOf(chosenSess) : -1;
+      const dayBadge = chosenSess && s.sessions?.length > 1
+        ? `<div class="badge badge-soft" style="background:rgba(79,70,229,0.08); color:#4338ca; border-color:rgba(79,70,229,0.2); margin-left:0.35rem;">Day ${chosenIdx + 1} of ${s.sessions.length}</div>`
+        : '';
+      const registeredSessionsBlock = buildSessionsScheduleBlock(s.sessions, {
+        highlightSessionId: r.chosenSessionId || undefined,
+        label: 'All sessions',
+      });
+
+      return `
+        <div class="card seminar-card" style="box-shadow:none; padding: 1rem; min-width: 290px; flex: 0 0 290px; display:flex; flex-direction:column; justify-content:space-between; border-color: rgba(5,150,105,0.35);">
+          <div style="display:flex; align-items:flex-start; gap: 0.8rem;">
+            <div style="width:36px; height:36px; border-radius:10px; background: rgba(5,150,105,0.12); display:flex; align-items:center; justify-content:center; color:#047857;">
+              <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <div style="flex:1;">
+              <div style="font-weight:600; color: var(--xu-blue);">
+                ${escapeHtml(s.title)}
+              </div>
+              <div class="muted small" style="margin-top:0.25rem; font-size:0.82rem;">${displayDate}</div>
+              ${registeredSessionsBlock}
+            </div>
+          </div>
+
+          <div class="muted" style="margin-top: 0.75rem; font-size:0.92rem; line-height:1.4;">
+            ${escapeHtml(truncate(s.description, 100))}
+          </div>
+
+          <div style="margin-top: 0.75rem; display:flex; flex-wrap:wrap; gap:0.3rem; align-items:center;">
+            <span class="badge badge-soft" style="background: rgba(5,150,105,0.12); color:#047857; border-color: rgba(5,150,105,0.28);">Registered</span>
+            ${dayBadge}
+          </div>
+          <p class="muted small" style="margin:0.65rem 0 0; font-size:0.8rem;">Your registration is approved. Please attend on the scheduled date${chosenSess ? ' and time' : ''}.</p>
+        </div>
+      `;
+    });
+
+    el.upcomingCarousel.innerHTML = cards.join('');
+    if (el.upcomingStatus) el.upcomingStatus.textContent = '';
+  };
+
+  // ========================
   // RENDER ATTENDED SEMINARS
   // ========================
 
@@ -644,10 +784,204 @@ document.addEventListener('DOMContentLoaded', () => {
     return 'FILE';
   };
 
+  let attendedSeminarsCache = [];
+  /** @type {'swipe'|'grid'|'list'} */
+  let attendedViewMode = 'swipe';
+  let attendedSortMode = 'date-desc';
+  let attendedSortMenuEl = null;
+  let attendedSortMenuCloseHandler = null;
+
+  const parseTimeToMinutesAttended = (value) => {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+    if (!match) return 0;
+    return Number(match[1]) * 60 + Number(match[2]);
+  };
+
+  const getRegistrationCreatedMs = (registrationId) => {
+    const id = String(registrationId || '');
+    if (/^[a-fA-F0-9]{24}$/.test(id)) return Number.parseInt(id.slice(0, 8), 16) * 1000;
+    return 0;
+  };
+
+  const sortAttendedNearestToFarthest = (rows) =>
+    [...rows].sort((a, b) => {
+      const aDate = new Date(a.seminar?.date || 0);
+      const bDate = new Date(b.seminar?.date || 0);
+      const d = aDate.getTime() - bDate.getTime();
+      if (d !== 0) return d;
+      return parseTimeToMinutesAttended(a.seminar?.startTime) - parseTimeToMinutesAttended(b.seminar?.startTime);
+    });
+
+  const sortAttendedSeminars = (rows, mode) => {
+    const list = Array.isArray(rows) ? [...rows] : [];
+    const n = String(mode || 'date-desc').toLowerCase();
+    if (n === 'recently-added') {
+      return list.sort((a, b) => getRegistrationCreatedMs(b.registrationId) - getRegistrationCreatedMs(a.registrationId));
+    }
+    if (n === 'date-desc') return sortAttendedNearestToFarthest(list).reverse();
+    if (n === 'date-asc') return sortAttendedNearestToFarthest(list);
+    if (n === 'name-asc') {
+      return list.sort((a, b) =>
+        String(a?.seminar?.title || '').localeCompare(String(b?.seminar?.title || ''), undefined, { sensitivity: 'base' })
+      );
+    }
+    if (n === 'name-desc') {
+      return list.sort((a, b) =>
+        String(b?.seminar?.title || '').localeCompare(String(a?.seminar?.title || ''), undefined, { sensitivity: 'base' })
+      );
+    }
+    return sortAttendedNearestToFarthest(list).reverse();
+  };
+
+  const applyAttendedViewMode = () => {
+    const rail = el.attendedSeminarsList;
+    if (!rail) return;
+
+    rail.classList.remove('attended-rail--swipe', 'attended-rail--grid', 'attended-rail--list');
+    if (attendedViewMode === 'grid') rail.classList.add('attended-rail--grid');
+    else if (attendedViewMode === 'list') rail.classList.add('attended-rail--list');
+    else rail.classList.add('attended-rail--swipe');
+
+    if (el.attendedViewSwipe) el.attendedViewSwipe.classList.toggle('is-active', attendedViewMode === 'swipe');
+    if (el.attendedViewGrid) el.attendedViewGrid.classList.toggle('is-active', attendedViewMode === 'grid');
+    if (el.attendedViewList) el.attendedViewList.classList.toggle('is-active', attendedViewMode === 'list');
+
+    const hasCards = rail.querySelectorAll('.joined-seminar-card').length > 0;
+    const showArrows = hasCards && attendedViewMode === 'swipe';
+    if (el.attendedPrev) el.attendedPrev.style.display = showArrows ? '' : 'none';
+    if (el.attendedNext) el.attendedNext.style.display = showArrows ? '' : 'none';
+  };
+
+  const closeAttendedSortMenu = () => {
+    if (attendedSortMenuEl) attendedSortMenuEl.remove();
+    attendedSortMenuEl = null;
+    if (attendedSortMenuCloseHandler) {
+      window.removeEventListener('pointerdown', attendedSortMenuCloseHandler, true);
+      attendedSortMenuCloseHandler = null;
+    }
+  };
+
+  const openAttendedSortMenu = (event) => {
+    if (!el.attendedSortBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeAttendedSortMenu();
+
+    const menu = document.createElement('div');
+    menu.style.position = 'fixed';
+    menu.style.zIndex = '1400';
+    menu.style.background = '#fff';
+    menu.style.border = '1px solid var(--border)';
+    menu.style.borderRadius = '0.55rem';
+    menu.style.boxShadow = '0 10px 30px rgba(15,23,42,0.16)';
+    menu.style.padding = '0.35rem';
+    menu.style.minWidth = '240px';
+
+    const options = [
+      { id: 'recently-added', label: 'Sort: Recently added' },
+      { id: 'date-asc', label: 'Sort: Ascending date' },
+      { id: 'date-desc', label: 'Sort: Descending date' },
+      { id: 'name-asc', label: 'Sort: Ascending name' },
+      { id: 'name-desc', label: 'Sort: Descending name' },
+    ];
+
+    options.forEach((opt) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn secondary';
+      btn.style.width = '100%';
+      btn.style.textAlign = 'left';
+      btn.style.display = 'block';
+      btn.style.borderRadius = '0.45rem';
+      btn.style.margin = '0';
+      btn.style.boxShadow = 'none';
+      btn.style.background = opt.id === attendedSortMode ? 'rgba(32,58,115,0.08)' : '#fff';
+      btn.textContent = opt.id === attendedSortMode ? `✓ ${opt.label}` : opt.label;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        attendedSortMode = opt.id;
+        closeAttendedSortMenu();
+        renderAttendedSeminars(sortAttendedSeminars([...attendedSeminarsCache], attendedSortMode));
+      });
+      menu.appendChild(btn);
+    });
+
+    document.body.appendChild(menu);
+
+    const btnRect = el.attendedSortBtn.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const left = Math.min(btnRect.right - menuRect.width, window.innerWidth - menuRect.width - 10);
+    const top = Math.min(btnRect.bottom + 8, window.innerHeight - menuRect.height - 10);
+    menu.style.left = `${Math.max(8, left)}px`;
+    menu.style.top = `${Math.max(8, top)}px`;
+
+    attendedSortMenuEl = menu;
+    attendedSortMenuCloseHandler = (e) => {
+      if (!attendedSortMenuEl) return;
+      const target = e.target;
+      if (attendedSortMenuEl.contains(target)) return;
+      if (el.attendedSortBtn && el.attendedSortBtn.contains(target)) return;
+      closeAttendedSortMenu();
+    };
+    window.addEventListener('pointerdown', attendedSortMenuCloseHandler, true);
+  };
+
+  const ATTENDED_DESC_COLLAPSE_THRESHOLD = 120;
+
+  const buildAttendedDescriptionHtml = (rawDesc) => {
+    const desc = String(rawDesc || '').trim();
+    if (!desc) return '<p class="muted small joined-seminar-description">—</p>';
+    const descHtml = escapeHtml(desc);
+    if (desc.length <= ATTENDED_DESC_COLLAPSE_THRESHOLD) {
+      return `<p class="muted small joined-seminar-description">${descHtml}</p>`;
+    }
+    return `
+      <div class="joined-seminar-desc-block">
+        <div class="joined-seminar-desc-view joined-seminar-description--collapsed">
+          <div class="joined-seminar-description-mask">
+            <p class="muted small joined-seminar-description" style="margin:0;">${descHtml}</p>
+          </div>
+          <button type="button" class="joined-seminar-desc-chevron-btn" aria-expanded="false" aria-label="Expand description">
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  };
+
+  const wireAttendedDescriptionToggles = () => {
+    if (!el.attendedSeminarsList) return;
+    el.attendedSeminarsList.querySelectorAll('.joined-seminar-desc-block').forEach((block) => {
+      const view = block.querySelector('.joined-seminar-desc-view');
+      const mask = block.querySelector('.joined-seminar-description-mask');
+      const btn = block.querySelector('.joined-seminar-desc-chevron-btn');
+      if (!view || !mask || !btn) return;
+
+      const setExpanded = (open) => {
+        view.classList.toggle('joined-seminar-description--expanded', open);
+        view.classList.toggle('joined-seminar-description--collapsed', !open);
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        btn.setAttribute('aria-label', open ? 'Collapse description' : 'Expand description');
+      };
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = !view.classList.contains('joined-seminar-description--expanded');
+        setExpanded(open);
+      });
+
+      mask.addEventListener('click', () => {
+        if (view.classList.contains('joined-seminar-description--collapsed')) setExpanded(true);
+      });
+    });
+  };
+
   const renderAttendedSeminars = (attendedSeminars) => {
     if (!el.attendedSeminarsList) return;
     if (!Array.isArray(attendedSeminars) || attendedSeminars.length === 0) {
       el.attendedSeminarsList.innerHTML = '<p class="muted">No attended seminars yet.</p>';
+      applyAttendedViewMode();
       return;
     }
 
@@ -657,6 +991,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const canDownloadCert = r.certificateIssued;
         const canEval = r.evaluationAvailable && !r.evaluationCompleted;
         const evalDone = r.evaluationCompleted;
+        const attendedChosen = r.chosenSessionId || null;
+        const attendedSessionsBlock = buildSessionsScheduleBlock(s.sessions, {
+          highlightSessionId: attendedChosen || undefined,
+          label: 'Sessions',
+        });
 
         return `
           <article class="joined-seminar-card" style="border-color: rgba(32,58,115,0.2);">
@@ -665,7 +1004,8 @@ document.addEventListener('DOMContentLoaded', () => {
               <span class="joined-seminar-date">${escapeHtml(formatSeminarDate(s.date))} • ${escapeHtml(formatTime(s.startTime))}</span>
             </div>
             <h3 class="joined-seminar-title">${escapeHtml(s.title || '')}</h3>
-            <p class="muted small joined-seminar-description">${escapeHtml(truncate(s.description || '', 110))}</p>
+            ${attendedSessionsBlock}
+            ${buildAttendedDescriptionHtml(s.description)}
             <div class="joined-seminar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
               <button
                 class="btn secondary"
@@ -783,6 +1123,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     });
+
+    wireAttendedDescriptionToggles();
+    applyAttendedViewMode();
   };
 
   // ========================
@@ -1298,12 +1641,48 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el.upcomingStatus) el.upcomingStatus.textContent = '';
     applySeminarFilter();
 
-    // Render attended seminars
-    renderAttendedSeminars(attendedSeminars);
+    // Render attended seminars (cache + current sort / view)
+    attendedSeminarsCache = attendedSeminars;
+    renderAttendedSeminars(sortAttendedSeminars([...attendedSeminarsCache], attendedSortMode));
 
     // Load notifications
     loadNotifications();
   };
+
+  let refreshOnVisibleTimer = null;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (refreshOnVisibleTimer) clearTimeout(refreshOnVisibleTimer);
+    refreshOnVisibleTimer = setTimeout(() => {
+      refreshOnVisibleTimer = null;
+      loadDashboard().catch(() => {});
+    }, 400);
+  });
+
+  el.attendedViewSwipe?.addEventListener('click', () => {
+    attendedViewMode = 'swipe';
+    applyAttendedViewMode();
+  });
+  el.attendedViewGrid?.addEventListener('click', () => {
+    attendedViewMode = 'grid';
+    applyAttendedViewMode();
+  });
+  el.attendedViewList?.addEventListener('click', () => {
+    attendedViewMode = 'list';
+    applyAttendedViewMode();
+  });
+  el.attendedSortBtn?.addEventListener('click', openAttendedSortMenu);
+
+  el.attendedPrev?.addEventListener('click', () => {
+    if (!el.attendedSeminarsList) return;
+    const amount = Math.max(290, el.attendedSeminarsList.clientWidth * 0.9);
+    el.attendedSeminarsList.scrollBy({ left: -amount, behavior: 'smooth' });
+  });
+  el.attendedNext?.addEventListener('click', () => {
+    if (!el.attendedSeminarsList) return;
+    const amount = Math.max(290, el.attendedSeminarsList.clientWidth * 0.9);
+    el.attendedSeminarsList.scrollBy({ left: amount, behavior: 'smooth' });
+  });
 
   // Initial load
   loadDashboard().catch((err) => {

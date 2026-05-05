@@ -313,22 +313,87 @@ router.get('/dashboard', async (req, res, next) => {
       },
       }));
 
-    // All registrations for this employee (to build different views)
+    // All registrations for this employee (to build different views).
+    // Do not use populate `match` here: when it fails, Mongoose sets seminarID to null and approved rows vanish from "Registered".
     const allRegistrations = await Registration.find({ employeeID: req.user.id })
       .populate({
         path: 'seminarID',
-        select: 'title description date startTime durationHours mandatory capacity registeredEmployees sessions multiSessionType',
-        match: { isDeleted: { $ne: true } },
+        select: 'title description date startTime durationHours mandatory capacity registeredEmployees sessions multiSessionType isDeleted',
       })
       .sort({ registeredAt: -1 });
 
+    const seminarIsListed = (semi) => Boolean(semi) && semi.isDeleted !== true;
+
+    const mapRegistrationToSeminarRow = (r) => {
+      const semi = r.seminarID;
+      if (!seminarIsListed(semi)) return null;
+      const sid = semi._id ?? semi;
+      return {
+        registrationId: r._id.toString(),
+        status: r.status,
+        chosenSessionId: r.chosenSessionId?.toString() || null,
+        seminar: {
+          id: sid.toString(),
+          title: semi.title,
+          description: semi.description,
+          date: semi.date,
+          startTime: semi.startTime,
+          durationHours: semi.durationHours,
+          mandatory: semi.mandatory,
+          multiSessionType: semi.multiSessionType || null,
+          sessions: Array.isArray(semi.sessions) ? semi.sessions.map((sess) => ({
+            _id: sess._id?.toString() || '',
+            id: sess._id?.toString() || '',
+            date: sess.date,
+            startTime: sess.startTime,
+            durationHours: sess.durationHours,
+          })) : [],
+        },
+      };
+    };
+
+    const registrationScheduleSortKey = (row) => {
+      const s = row.seminar;
+      if (!s) return 0;
+      const timeToMin = (t) => {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '').trim());
+        return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+      };
+      if (row.chosenSessionId && Array.isArray(s.sessions)) {
+        const sess = s.sessions.find((x) => String(x._id || x.id || '') === String(row.chosenSessionId));
+        if (sess?.date) {
+          return new Date(sess.date).getTime() + timeToMin(sess.startTime);
+        }
+      }
+      return new Date(s.date || 0).getTime() + timeToMin(s.startTime);
+    };
+
+    const normStatus = (s) => String(s || '').toLowerCase().trim();
+
     // Pre-registered seminars
     const preRegistered = allRegistrations
-      .filter((r) => r.status === 'pre-registered' && r.seminarID)
+      .filter((r) => normStatus(r.status) === 'pre-registered' && seminarIsListed(r.seminarID))
+      .map((r) => mapRegistrationToSeminarRow(r))
+      .filter(Boolean);
+
+    // Approved registrations (scheduled attendance)
+    const registeredSeminars = allRegistrations
+      .filter((r) => normStatus(r.status) === 'registered' && seminarIsListed(r.seminarID))
+      .map((r) => mapRegistrationToSeminarRow(r))
+      .filter(Boolean)
+      .sort((a, b) => registrationScheduleSortKey(a) - registrationScheduleSortKey(b));
+
+    // Attended seminars view (with cert and eval info)
+    const attendedSeminars = allRegistrations
+      .filter((r) => normStatus(r.status) === 'attended' && seminarIsListed(r.seminarID))
       .map((r) => ({
         registrationId: r._id.toString(),
         status: r.status,
         chosenSessionId: r.chosenSessionId?.toString() || null,
+        certificateIssued: r.certificateIssued,
+        certificateCode: r.certificateCode || '',
+        evaluationAvailable: r.evaluationAvailable,
+        evaluationCompleted: r.evaluationCompleted,
         seminar: {
           id: r.seminarID._id.toString(),
           title: r.seminarID.title,
@@ -345,27 +410,6 @@ router.get('/dashboard', async (req, res, next) => {
             startTime: sess.startTime,
             durationHours: sess.durationHours,
           })) : [],
-        },
-      }));
-
-    // Attended seminars view (with cert and eval info)
-    const attendedSeminars = allRegistrations
-      .filter((r) => r.status === 'attended' && r.seminarID)
-      .map((r) => ({
-        registrationId: r._id.toString(),
-        status: r.status,
-        certificateIssued: r.certificateIssued,
-        certificateCode: r.certificateCode || '',
-        evaluationAvailable: r.evaluationAvailable,
-        evaluationCompleted: r.evaluationCompleted,
-        seminar: {
-          id: r.seminarID._id.toString(),
-          title: r.seminarID.title,
-          description: r.seminarID.description,
-          date: r.seminarID.date,
-          startTime: r.seminarID.startTime,
-          durationHours: r.seminarID.durationHours,
-          mandatory: r.seminarID.mandatory,
         },
       }));
 
@@ -398,6 +442,7 @@ router.get('/dashboard', async (req, res, next) => {
       upcomingSeminars,
       certificates: certificatesView,
       preRegistered,
+      registeredSeminars,
       attendedSeminars,
     });
   } catch (err) {
