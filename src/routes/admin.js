@@ -228,6 +228,33 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
+// Lightweight badge counts shown on the admin sidebar (pending actions for
+// seminars). The frontend polls this to render the unread-style dot.
+router.get('/notifications/summary', authMiddleware, async (req, res, next) => {
+  try {
+    const pendingApprovals = await Registration.countDocuments({ status: 'pre-registered' });
+
+    const seminars = await Seminar.find({ isDeleted: { $ne: true } })
+      .select('isHeld sessions')
+      .lean();
+    const pendingFinalization = seminars.reduce((acc, s) => {
+      const sessions = Array.isArray(s.sessions) ? s.sessions : [];
+      const allHeld = sessions.length > 0 && sessions.every((sess) => sess.isHeld);
+      return acc + (allHeld && !s.isHeld ? 1 : 0);
+    }, 0);
+
+    res.json({
+      seminars: {
+        pendingApprovals,
+        pendingFinalization,
+        total: pendingApprovals + pendingFinalization,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Dashboard summary
 router.get('/reports/summary', authMiddleware, async (req, res, next) => {
   try {

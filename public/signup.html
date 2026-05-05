@@ -221,13 +221,16 @@
             </label>
             <label>
               Password <span class="required-asterisk">*</span>
-              <input
-                type="password"
-                id="signup-password"
-                name="password"
-                autocomplete="new-password"
-                required
-              />
+              <div class="password-field">
+                <input
+                  type="password"
+                  id="signup-password"
+                  name="password"
+                  autocomplete="new-password"
+                  required
+                />
+                <button type="button" class="password-toggle" aria-label="Show password"></button>
+              </div>
               <small class="muted" style="display:block; margin-top:0.3rem; font-size:0.8rem; font-weight:400;">
                 Must be at least 8 characters and include an uppercase letter, a number, and a special character.
               </small>

@@ -73,7 +73,33 @@ const initGoogleSignIn = async () => {
   }
 };
 
+const _decodeJwt = (jwtToken) => {
+  try {
+    const parts = String(jwtToken || '').split('.');
+    if (parts.length !== 3) return null;
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+    return JSON.parse(atob(b64 + pad));
+  } catch { return null; }
+};
+const _redirectIfLoggedIn = () => {
+  const stored = window.localStorage.getItem('gims_employee_token');
+  if (!stored) return false;
+  const payload = _decodeJwt(stored);
+  if (!payload || (payload.exp && Date.now() / 1000 > payload.exp)) {
+    window.localStorage.removeItem('gims_employee_token');
+    window.localStorage.removeItem('gims_role');
+    return false;
+  }
+  const role = window.localStorage.getItem('gims_role') || payload.role;
+  window.location.replace(role === 'admin' ? '/admin.html' : '/employee.html');
+  return true;
+};
+
 document.addEventListener('DOMContentLoaded', () => {
+  if (_redirectIfLoggedIn()) return;
+  // Re-check on Back/Forward (bfcache) so a fresh login doesn't re-render here.
+  window.addEventListener('pageshow', () => { _redirectIfLoggedIn(); });
   initGoogleSignIn();
 
   document.querySelectorAll('.password-toggle').forEach(btn => {
