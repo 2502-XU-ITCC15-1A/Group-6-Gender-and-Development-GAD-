@@ -80,6 +80,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     upcomingCarousel: document.getElementById('upcoming-carousel'),
     upcomingStatus: document.getElementById('upcoming-status'),
+    upcomingViewSwipe: document.getElementById('employee-upcoming-view-swipe'),
+    upcomingViewGrid: document.getElementById('employee-upcoming-view-grid'),
+    upcomingViewList: document.getElementById('employee-upcoming-view-list'),
 
     attendedSeminarsList: document.getElementById('attended-seminars-list'),
     attendedCertStatus: document.getElementById('attended-cert-status'),
@@ -175,12 +178,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const formatSeminarDate = (date) => {
-    if (!date) return '';
-    try {
-      return new Date(date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
-    } catch {
-      return String(date);
-    }
+    if (!date) return '—';
+    const d = new Date(date);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
   };
 
   /** Compact list of every session (date • time) for multi-day seminars; optional highlight for pick-one / chosen day. */
@@ -599,6 +600,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div style="flex:1;">
                 <div style="font-weight:600; color: var(--xu-blue);">${escapeHtml(s.title)}</div>
                 <div class="muted small" style="margin-top:0.2rem; font-size:0.83rem;">${dateDisplay}</div>
+                ${s.location ? `<div class="muted small" style="font-size:0.82rem; margin-top:0.1rem;"><i class="fa-solid fa-location-dot" style="margin-right:0.25rem;"></i>${escapeHtml(s.location)}</div>` : ''}
                 ${seriesLine}
                 ${sessionsScheduleHtml}
               </div>
@@ -1666,6 +1668,19 @@ document.addEventListener('DOMContentLoaded', () => {
       loadDashboard().catch(() => {});
     }, 400);
   });
+
+  const applyUpcomingViewMode = (mode) => {
+    const rail = el.upcomingCarousel;
+    if (!rail) return;
+    rail.classList.remove('view-swipe', 'view-grid', 'view-list');
+    rail.classList.add(`view-${mode}`);
+    if (el.upcomingViewSwipe) el.upcomingViewSwipe.classList.toggle('is-active', mode === 'swipe');
+    if (el.upcomingViewGrid) el.upcomingViewGrid.classList.toggle('is-active', mode === 'grid');
+    if (el.upcomingViewList) el.upcomingViewList.classList.toggle('is-active', mode === 'list');
+  };
+  el.upcomingViewSwipe?.addEventListener('click', () => applyUpcomingViewMode('swipe'));
+  el.upcomingViewGrid?.addEventListener('click', () => applyUpcomingViewMode('grid'));
+  el.upcomingViewList?.addEventListener('click', () => applyUpcomingViewMode('list'));
 
   el.attendedViewSwipe?.addEventListener('click', () => {
     attendedViewMode = 'swipe';

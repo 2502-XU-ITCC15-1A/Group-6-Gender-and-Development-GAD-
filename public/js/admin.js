@@ -1508,6 +1508,7 @@ document.addEventListener('DOMContentLoaded', () => {
     seminarEditForm.elements.capacity.value = seminar.capacity || 1;
     seminarEditForm.elements.mandatory.value = seminar.mandatory ? 'true' : 'false';
     seminarEditForm.elements.description.value = seminar.description || '';
+    if (seminarEditForm.elements.location) seminarEditForm.elements.location.value = seminar.location || '';
     const editAutoSendCheckbox = document.getElementById('edit-auto-send-cert-checkbox');
     if (editAutoSendCheckbox) editAutoSendCheckbox.checked = Boolean(seminar.autoSendCertificates);
 
@@ -2549,6 +2550,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const payload = {
       title: formBody.title,
       description: formBody.description,
+      location: formBody.location || '',
       mandatory: formBody.mandatory,
       capacity: formBody.capacity,
       autoSendCertificates,
@@ -2634,6 +2636,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const payload = {
       title: body.title,
       description: body.description,
+      location: body.location || '',
       capacity: body.capacity,
       mandatory: body.mandatory,
       certificateReleaseMode: releaseMode,

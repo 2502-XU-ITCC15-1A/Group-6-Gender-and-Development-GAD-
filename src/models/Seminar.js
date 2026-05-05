@@ -4,6 +4,7 @@ const SeminarSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true, trim: true },
+    location: { type: String, trim: true, default: '' },
     date: { type: Date, required: true },
     startTime: { type: String, required: true }, // e.g. "14:00"
     durationHours: { type: Number, required: true, min: 0.5 },

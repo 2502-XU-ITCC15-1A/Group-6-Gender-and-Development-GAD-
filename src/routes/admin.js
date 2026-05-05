@@ -609,7 +609,7 @@ const buildValidatedSessions = (rawSessions, allowPast = false) => {
 
 router.post('/seminars', authMiddleware, async (req, res, next) => {
   try {
-    const { title, description, mandatory, capacity, autoSendCertificates, certificateReleaseMode, multiSessionType } = req.body;
+    const { title, description, location, mandatory, capacity, autoSendCertificates, certificateReleaseMode, multiSessionType } = req.body;
     if (!title || !description || !capacity) {
       return res.status(400).json({ message: 'Title, description, and capacity are required.' });
     }
@@ -628,6 +628,7 @@ router.post('/seminars', authMiddleware, async (req, res, next) => {
     const seminar = await Seminar.create({
       title: String(title).trim(),
       description: String(description).trim(),
+      location: String(location || '').trim(),
       date: sessions[0].date,
       startTime: sessions[0].startTime,
       durationHours: sessions[0].durationHours,
@@ -1202,7 +1203,7 @@ router.get('/employees/:employeeId/certificates/:registrationId/download', authM
 
 router.put('/seminars/:id', authMiddleware, async (req, res, next) => {
   try {
-    const { title, description, mandatory, capacity, autoSendCertificates, certificateReleaseMode, multiSessionType } = req.body;
+    const { title, description, location, mandatory, capacity, autoSendCertificates, certificateReleaseMode, multiSessionType } = req.body;
     if (!title || !description || !capacity) {
       return res.status(400).json({ message: 'Title, description, and capacity are required.' });
     }
@@ -1245,6 +1246,7 @@ router.put('/seminars/:id', authMiddleware, async (req, res, next) => {
 
     seminar.title = String(title).trim();
     seminar.description = String(description).trim();
+    if (typeof location !== 'undefined') seminar.location = String(location || '').trim();
     seminar.sessions = newSessions;
     seminar.date = newSessions[0]?.date || seminar.date;
     seminar.startTime = newSessions[0]?.startTime || seminar.startTime;
