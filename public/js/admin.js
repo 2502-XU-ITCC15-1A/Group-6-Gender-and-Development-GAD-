@@ -1,3 +1,10 @@
+window.addEventListener('error', (event) => {
+  console.error('[admin] uncaught error', event.error || event.message, event.filename, event.lineno);
+});
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[admin] unhandled promise rejection', event.reason);
+});
+
 const _EYE = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const _EYE_OFF = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 
@@ -605,6 +612,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadSummary();
       await loadDepartmentsAndEmployees();
     } catch (err) {
+      console.error('[admin] update account status failed', err);
       if (employeesStatusEl) employeesStatusEl.textContent = err.message || 'Failed to update account status.';
     }
   };
@@ -1053,6 +1061,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     } catch (err) {
+      console.error('[admin] load seminar report failed', err);
       if (seminarReportContentEl) {
         seminarReportContentEl.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Failed to load report.')}</p>`;
       }
@@ -1107,6 +1116,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (materialsUploadStatusEl) materialsUploadStatusEl.textContent = data?.message || 'Material removed.';
           await loadSeminarMaterials(attendanceModalState.seminarId);
         } catch (err) {
+          console.error('[admin] remove material failed', err);
           if (materialsUploadStatusEl) materialsUploadStatusEl.textContent = err.message || 'Failed to remove material.';
         }
       });
@@ -1122,6 +1132,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) throw new Error(data?.message || 'Failed to load materials');
       renderSeminarMaterials(Array.isArray(data) ? data : []);
     } catch (err) {
+      console.error('[admin] load seminar materials failed', err);
       if (seminarMaterialsListEl) seminarMaterialsListEl.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Failed to load materials.')}</p>`;
     }
   };
@@ -1157,6 +1168,7 @@ document.addEventListener('DOMContentLoaded', () => {
       seminarMaterialsFormEl.reset();
       await loadSeminarMaterials(attendanceModalState.seminarId);
     } catch (err) {
+      console.error('[admin] upload material failed', err);
       if (materialsUploadStatusEl) materialsUploadStatusEl.textContent = err.message || 'Upload failed.';
     } finally {
       if (uploadBtn) uploadBtn.disabled = false;
@@ -1194,6 +1206,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (seminar) await openParticipantsModal(seminar);
       updateSeminarsNotificationDot();
     } catch (err) {
+      console.error('[admin] approve participants failed', err);
       if (preRegStatusEl) preRegStatusEl.textContent = err.message || 'Failed to approve participants.';
     }
   });
@@ -1281,6 +1294,7 @@ document.addEventListener('DOMContentLoaded', () => {
           a.remove();
           setTimeout(() => URL.revokeObjectURL(url), 1000);
         } catch (err) {
+          console.error('[admin] certificate download failed', err);
           if (profileModalStatusEl) profileModalStatusEl.textContent = err.message || 'Certificate download failed.';
         }
       });
@@ -1358,6 +1372,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderEmployeeSeminarsList(profileTakenListEl, takenSeminars, 'No seminars taken yet.');
       renderEmployeeCertificatesList(row.id, certificates);
     } catch (err) {
+      console.error('[admin] load employee seminar details failed', err);
       if (profileModalStatusEl) {
         profileModalStatusEl.textContent = err.message || 'Failed to load seminar details.';
       }
@@ -1669,6 +1684,7 @@ document.addEventListener('DOMContentLoaded', () => {
           : 'Mark this seminar as held first before recording attendance.';
       }
     } catch (err) {
+      console.error('[admin] load participants failed', err);
       if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = err.message || 'Failed to load participants.';
       if (preRegStatusEl) preRegStatusEl.textContent = err.message || 'Failed to load participants.';
     }
@@ -1742,6 +1758,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (seminarsStatusEl) seminarsStatusEl.textContent = data?.message || 'Seminar marked as held.';
           await loadSeminars();
         } catch (err) {
+          console.error('[admin] mark seminar as held failed (list)', err);
           if (seminarsStatusEl) seminarsStatusEl.textContent = err.message || 'Failed to mark seminar as held.';
         }
       });
@@ -1761,6 +1778,7 @@ document.addEventListener('DOMContentLoaded', () => {
           await loadSummary();
           await loadSeminars();
         } catch (err) {
+          console.error('[admin] delete seminar failed', err);
           if (seminarsStatusEl) seminarsStatusEl.textContent = err.message || 'Failed to delete seminar.';
         }
       });
@@ -1806,6 +1824,7 @@ document.addEventListener('DOMContentLoaded', () => {
           await loadSummary();
           await loadSeminars();
         } catch (err) {
+          console.error('[admin] restore seminar failed', err);
           if (deletedSeminarsStatusEl) deletedSeminarsStatusEl.textContent = err.message || 'Failed to restore seminar.';
         }
       });
@@ -1826,6 +1845,7 @@ document.addEventListener('DOMContentLoaded', () => {
           await loadSummary();
           await loadSeminars();
         } catch (err) {
+          console.error('[admin] permanently delete seminar failed', err);
           if (deletedSeminarsStatusEl) deletedSeminarsStatusEl.textContent = err.message || 'Failed to permanently delete seminar.';
         }
       });
@@ -1916,6 +1936,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSeminarsNotificationDot();
       }
     } catch (err) {
+      console.error('[admin] load seminars failed', err);
       if (seminarsStatusEl) seminarsStatusEl.textContent = err.message || 'Failed to load seminars.';
       if (isDeletedSeminarsModalOpen && deletedSeminarsStatusEl) {
         deletedSeminarsStatusEl.textContent = err.message || 'Failed to load recently deleted seminars.';
@@ -2036,6 +2057,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       renderEmployeesTable(rows);
     } catch (err) {
+      console.error('[admin] load employees failed', err);
       employeesStatusEl.textContent = err.message || 'Failed to load employees.';
       if (String(err.message || '').toLowerCase().includes('invalid token')) {
         window.localStorage.removeItem('gims_employee_token');
@@ -2279,6 +2301,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await loadDeletedSeminars();
     } catch (err) {
+      console.error('[admin] load recently deleted seminars failed', err);
       if (deletedSeminarsStatusEl) {
         deletedSeminarsStatusEl.textContent = err.message || 'Failed to load recently deleted seminars.';
       }
@@ -2345,6 +2368,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const seminar = currentSeminars.find((item) => String(item._id) === String(attendanceModalState.seminarId));
       if (seminar) await openParticipantsModal(seminar);
     } catch (err) {
+      console.error('[admin] mark seminar as held failed (participants)', err);
       if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = err.message || 'Failed to mark seminar as held.';
     }
   });
@@ -2374,6 +2398,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const seminar = currentSeminars.find((item) => String(item._id) === String(attendanceModalState.seminarId));
       if (seminar) await openParticipantsModal(seminar);
     } catch (err) {
+      console.error('[admin] record attendance failed', err);
       if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = err.message || 'Failed to record attendance.';
     }
   });
@@ -2409,6 +2434,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const seminar = currentSeminars.find((item) => String(item._id) === String(attendanceModalState.seminarId));
       if (seminar) await openParticipantsModal(seminar);
     } catch (err) {
+      console.error('[admin] send certificates failed', err);
       if (seminarParticipantsStatusEl) seminarParticipantsStatusEl.textContent = err.message || 'Failed to send certificates.';
     }
   });
@@ -2481,6 +2507,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (seminarsStatusEl) seminarsStatusEl.textContent = 'Seminar updated successfully.';
       await loadSeminars();
     } catch (err) {
+      console.error('[admin] update seminar failed', err);
       if (seminarEditStatusEl) seminarEditStatusEl.textContent = err.message || 'Failed to update seminar.';
     }
   });
@@ -2510,6 +2537,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (createAdminStatusEl) createAdminStatusEl.textContent = '';
       }, 2000);
     } catch (err) {
+      console.error('[admin] create admin failed', err);
       if (createAdminStatusEl) createAdminStatusEl.textContent = err.message || 'Admin creation failed.';
     }
   });
@@ -2573,6 +2601,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadSeminars();
       closeCreateSeminarModal();
     } catch (err) {
+      console.error('[admin] create seminar failed', err);
       if (createSeminarStatusEl) createSeminarStatusEl.textContent = err.message || 'Seminar creation failed.';
     }
   });
@@ -2626,6 +2655,7 @@ document.addEventListener('DOMContentLoaded', () => {
         data?.sent !== undefined ? `Emails sent successfully (${data.sent}).` : 'Emails sent successfully.';
       await loadSummary();
     } catch (err) {
+      console.error('[admin] send emails failed', err);
       employeesStatusEl.textContent = err.message || 'Failed to send emails.';
     }
   });
@@ -2670,6 +2700,7 @@ document.addEventListener('DOMContentLoaded', () => {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
+      console.error('[admin] export failed', err);
       employeesStatusEl.textContent = err.message || 'Failed to export.';
     } finally {
       exportBtn.disabled = false;
@@ -2690,6 +2721,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setDeletedSeminarsModalVisibility(false);
   showNavModule('dashboard');
   loadAll().catch((err) => {
+    console.error('[admin] loadAll failed', err);
     employeesStatusEl.textContent = err.message || 'Failed to load admin dashboard.';
     window.localStorage.removeItem('gims_employee_token');
     window.localStorage.removeItem('gims_role');
