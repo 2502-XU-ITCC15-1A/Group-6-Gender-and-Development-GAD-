@@ -1434,6 +1434,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const setTopbarFromToken = () => {
+    const payload = decodeJwtPayload(adminToken) || {};
     const email = String(payload.email || '');
     const first = email.split('@')[0] || '';
     const prettyName = first
