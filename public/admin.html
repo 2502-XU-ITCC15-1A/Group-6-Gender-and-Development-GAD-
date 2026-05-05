@@ -240,33 +240,92 @@
         align-items: center;
         justify-content: center;
       }
-      .nav-notification-dot {
-        display: inline-block;
-        width: 0.55rem;
-        height: 0.55rem;
-        margin-left: 0.45rem;
-        border-radius: 999px;
-        background: #ef4444;
-        box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.28);
-        vertical-align: middle;
-        animation: gims-dot-pulse 1.6s ease-in-out infinite;
-      }
-      .nav-notification-dot[data-count]::after {
-        content: attr(data-count);
+      /* Notification Bell */
+      .notif-bell-wrapper {
         position: relative;
-        top: -0.7rem;
-        left: 0.15rem;
+        display: inline-flex;
+        align-items: center;
+      }
+      .notif-badge {
+        position: absolute;
+        top: 0;
+        right: 0;
         background: #ef4444;
         color: #fff;
         font-size: 0.65rem;
-        line-height: 1;
-        padding: 0.12rem 0.32rem;
-        border-radius: 999px;
         font-weight: 700;
+        border-radius: 999px;
+        min-width: 16px;
+        height: 16px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 3px;
+        line-height: 1;
+        display: none;
       }
-      @keyframes gims-dot-pulse {
-        0%, 100% { transform: scale(1); opacity: 1; }
-        50%      { transform: scale(1.18); opacity: 0.78; }
+      .notif-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: min(360px, 92vw);
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+        z-index: 1000;
+        display: none;
+        overflow: hidden;
+      }
+      .notif-dropdown.is-open {
+        display: block;
+      }
+      .notif-dropdown-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border);
+        font-weight: 700;
+        font-size: 0.95rem;
+      }
+      .notif-list {
+        max-height: 380px;
+        overflow-y: auto;
+      }
+      .notif-item {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+        transition: background 0.12s;
+        display: flex;
+        gap: 0.65rem;
+        align-items: flex-start;
+      }
+      .notif-item:last-child { border-bottom: none; }
+      .notif-item:hover { background: rgba(32,58,115,0.05); }
+      .notif-item.unread { background: rgba(32,58,115,0.06); }
+      .notif-item.unread:hover { background: rgba(32,58,115,0.10); }
+      .notif-icon {
+        font-size: 1.2rem;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+      .notif-item-body { flex: 1; min-width: 0; }
+      .notif-item-msg { font-size: 0.88rem; line-height: 1.4; color: var(--text); }
+      .notif-item-time { font-size: 0.77rem; color: var(--muted); margin-top: 0.2rem; }
+      .notif-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--xu-blue);
+        flex-shrink: 0;
+        margin-top: 5px;
+      }
+      .notif-empty {
+        padding: 1.5rem 1rem;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.9rem;
       }
       .visually-hidden {
         position: absolute !important;
@@ -293,6 +352,23 @@
           <button class="topbar-profile-trigger" id="admin-profile-trigger" type="button" title="View Profile">
             <i class="fa-solid fa-circle-user"></i>
           </button>
+
+          <div class="notif-bell-wrapper" id="admin-notif-bell-wrapper">
+            <button class="notif-bell-btn" id="admin-notif-bell-btn" type="button" aria-label="Notifications" title="Notifications">
+              <i class="fa-solid fa-bell"></i>
+              <span class="notif-badge" id="admin-notif-badge"></span>
+            </button>
+            <div class="notif-dropdown" id="admin-notif-dropdown">
+              <div class="notif-dropdown-header">
+                <span>Notifications</span>
+                <button class="btn secondary" id="admin-notif-refresh-btn" type="button" style="padding: 0.2rem 0.6rem; font-size:0.8rem;">Refresh</button>
+              </div>
+              <div class="notif-list" id="admin-notif-list">
+                <div class="notif-empty">No notifications yet.</div>
+              </div>
+            </div>
+          </div>
+
           <button class="btn secondary" id="admin-logout-btn" type="button">Logout</button>
         </div>
       </div>
@@ -318,8 +394,6 @@
             </button>
             <button class="dashboard-sidebar-link" type="button" data-nav="seminars" id="admin-nav-seminars">
               Manage Seminars
-              <span class="nav-notification-dot" id="admin-seminars-notif-dot" hidden aria-hidden="true" title="Action needed"></span>
-              <span class="visually-hidden" id="admin-seminars-notif-sr"></span>
             </button>
             <button class="dashboard-sidebar-link" type="button" data-nav="create-admin" id="admin-nav-create-admin">
               Admin Accounts
