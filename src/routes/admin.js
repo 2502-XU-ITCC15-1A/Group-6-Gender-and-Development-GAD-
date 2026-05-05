@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import path from 'path';
@@ -964,11 +965,25 @@ router.post('/seminars/:id/approve', authMiddleware, async (req, res, next) => {
       return res.status(400).json({ message: 'Select at least one participant to approve.' });
     }
 
+    const registrationObjectIds = registrationIds
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+    if (!registrationObjectIds.length) {
+      return res.status(400).json({ message: 'Invalid registration id(s).' });
+    }
+
     const registrations = await Registration.find({
-      _id: { $in: registrationIds },
+      _id: { $in: registrationObjectIds },
       seminarID: seminar._id,
       status: 'pre-registered',
     }).populate('employeeID', 'name');
+
+    if (!registrations.length) {
+      return res.status(400).json({
+        message:
+          'No pending pre-registrations matched those selections. Refresh the list and try again, or check that each row is still awaiting approval.',
+      });
+    }
 
     let approvedCount = 0;
     for (const reg of registrations) {
