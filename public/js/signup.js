@@ -209,6 +209,18 @@ document.addEventListener('DOMContentLoaded', () => {
     input?.addEventListener('input', () => markFieldInvalid(input, false));
   });
 
+  const passwordHintEl = document.getElementById('signup-password-hint');
+  const isPasswordSufficient = (pw) =>
+    pw.length >= 8 && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
+  const updatePasswordHint = () => {
+    if (!passwordHintEl) return;
+    const value = passwordInput?.value || '';
+    const show = value.length > 0 && !isPasswordSufficient(value);
+    passwordHintEl.style.display = show ? 'block' : 'none';
+  };
+  passwordInput?.addEventListener('input', updatePasswordHint);
+  passwordInput?.addEventListener('blur', updatePasswordHint);
+
   /** @type {string | null} */
   let registrationToken = null;
   /** @type {string | null} */
@@ -418,12 +430,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (!googleProfileToken) {
-      const pw = payload.password;
-      if (pw.length < 8 || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw) || !/[^A-Za-z0-9]/.test(pw)) {
+      if (!isPasswordSufficient(payload.password)) {
         const msg = 'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.';
         completeStatusEl.textContent = msg;
         showErrorPopup(msg);
         markFieldInvalid(passwordInput, true);
+        if (passwordHintEl) passwordHintEl.style.display = 'block';
         passwordInput?.focus();
         return;
       }
