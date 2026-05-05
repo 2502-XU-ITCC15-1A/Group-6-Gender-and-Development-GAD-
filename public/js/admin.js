@@ -28,13 +28,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  const payload = decodeJwtPayload(adminToken);
-  if (!adminToken || payload?.role !== 'admin') {
+  const isAdminTokenValid = (jwtToken) => {
+    const data = decodeJwtPayload(jwtToken);
+    if (!data || data.role !== 'admin') return false;
+    if (data.exp && Date.now() / 1000 > data.exp) return false;
+    return true;
+  };
+
+  const redirectToHome = () => {
     window.localStorage.removeItem('gims_employee_token');
     window.localStorage.removeItem('gims_role');
-    window.location.href = '/';
+    window.location.replace('/');
+  };
+
+  if (!isAdminTokenValid(adminToken)) {
+    redirectToHome();
     return;
   }
+
+  // Re-validate when the page is shown from the bfcache (Back/Forward nav).
+  window.addEventListener('pageshow', (event) => {
+    const stored = window.localStorage.getItem('gims_employee_token');
+    if (event.persisted || stored !== adminToken) {
+      adminToken = stored;
+      if (!isAdminTokenValid(adminToken)) redirectToHome();
+    }
+  });
 
   const logoutBtn = document.getElementById('admin-logout-btn');
   const createAdminForm = document.getElementById('admin-create-admin-form');
@@ -1173,6 +1192,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Reload the modal
       const seminar = currentSeminars.find((s) => String(s._id) === String(attendanceModalState.seminarId));
       if (seminar) await openParticipantsModal(seminar);
+      updateSeminarsNotificationDot();
     } catch (err) {
       if (preRegStatusEl) preRegStatusEl.textContent = err.message || 'Failed to approve participants.';
     }
@@ -1891,6 +1911,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isDeletedSeminarsModalOpen) {
         await loadDeletedSeminars();
       }
+      if (typeof updateSeminarsNotificationDot === 'function') {
+        updateSeminarsNotificationDot();
+      }
     } catch (err) {
       if (seminarsStatusEl) seminarsStatusEl.textContent = err.message || 'Failed to load seminars.';
       if (isDeletedSeminarsModalOpen && deletedSeminarsStatusEl) {
@@ -2016,7 +2039,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (String(err.message || '').toLowerCase().includes('invalid token')) {
         window.localStorage.removeItem('gims_employee_token');
         window.localStorage.removeItem('gims_role');
-        window.location.href = '/';
+        window.location.replace('/');
       }
     }
   };
@@ -2030,12 +2053,47 @@ document.addEventListener('DOMContentLoaded', () => {
     compliantEmployeesEl.textContent = String(data.compliant ?? 0);
   };
 
+  const seminarsNotifDotEl = document.getElementById('admin-seminars-notif-dot');
+  const seminarsNotifSrEl = document.getElementById('admin-seminars-notif-sr');
+  const updateSeminarsNotificationDot = async () => {
+    if (!seminarsNotifDotEl) return;
+    try {
+      const res = await authedFetch('/api/admin/notifications/summary');
+      if (!res.ok) return;
+      const data = await res.json();
+      const summary = data?.seminars || {};
+      const total = Number(summary.total || 0);
+      if (total > 0) {
+        seminarsNotifDotEl.hidden = false;
+        if (total > 1) seminarsNotifDotEl.setAttribute('data-count', total > 99 ? '99+' : String(total));
+        else seminarsNotifDotEl.removeAttribute('data-count');
+        if (seminarsNotifSrEl) {
+          const parts = [];
+          if (summary.pendingApprovals) parts.push(`${summary.pendingApprovals} pending approval${summary.pendingApprovals === 1 ? '' : 's'}`);
+          if (summary.pendingFinalization) parts.push(`${summary.pendingFinalization} seminar${summary.pendingFinalization === 1 ? '' : 's'} ready to finalize`);
+          seminarsNotifSrEl.textContent = parts.length ? `(${parts.join(', ')})` : '';
+        }
+      } else {
+        seminarsNotifDotEl.hidden = true;
+        seminarsNotifDotEl.removeAttribute('data-count');
+        if (seminarsNotifSrEl) seminarsNotifSrEl.textContent = '';
+      }
+    } catch {
+      // Silent — the dot is non-critical UI.
+    }
+  };
+
   const loadAll = async () => {
     await loadSummary();
     await loadDepartmentsAndEmployees();
     await loadSeminars();
+    await updateSeminarsNotificationDot();
     window.localStorage.setItem('gims_role', 'admin');
   };
+
+  // Refresh the badge on a light interval so admins see new pre-registrations
+  // without a full page reload.
+  setInterval(() => { updateSeminarsNotificationDot(); }, 60_000);
 
   // ========================
   // EVENT LISTENERS
@@ -2553,7 +2611,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.localStorage.removeItem('gims_employee_token');
     window.localStorage.removeItem('gims_role');
     adminToken = null;
-    window.location.href = '/';
+    window.location.replace('/');
   });
 
   initCalendarToggle('create');
@@ -2566,7 +2624,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.localStorage.removeItem('gims_employee_token');
     window.localStorage.removeItem('gims_role');
     setTimeout(() => {
-      window.location.href = '/';
+      window.location.replace('/');
     }, 600);
   });
 });
