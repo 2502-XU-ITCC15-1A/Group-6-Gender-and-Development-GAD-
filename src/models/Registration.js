@@ -58,6 +58,14 @@ const RegistrationSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    reminderSentAt: {
+      type: Date,
+      default: null,
+    },
+    reminderTargetDate: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

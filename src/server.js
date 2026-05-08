@@ -4,6 +4,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import { connectDB } from './config/db.js';
 import { bootstrapHardcodedAdmins } from './config/bootstrapAccounts.js';
+import { startReminderScheduler } from './services/seminarReminderScheduler.js';
 import adminRoutes from './routes/admin.js';
 import maintenanceRoutes from './routes/maintenance.js';
 import employeeRoutes from './routes/employee.js';
@@ -70,6 +71,7 @@ const start = async () => {
   try {
     await connectDB();
     await bootstrapHardcodedAdmins();
+    startReminderScheduler();
     app.listen(PORT, () => {
       console.log(`GIMS server listening on port ${PORT}`);
     });

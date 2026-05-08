@@ -313,6 +313,62 @@ export const sendReminderEmail = async (employee, remainingCount) => {
   });
 };
 
+export const sendSeminarReminderEmail = async ({ employee, seminar, sessionDate, sessionStartTime }) => {
+  if (!employee?.email) throw new Error('Employee has no email address.');
+
+  const seminarTitle = seminar?.title || 'GAD Seminar';
+  const dateObj = sessionDate ? new Date(sessionDate) : (seminar?.date ? new Date(seminar.date) : null);
+  const dateStr = dateObj
+    ? dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    : 'tomorrow';
+  const timeStr = sessionStartTime || seminar?.startTime || '';
+  const location = seminar?.location || 'TBA';
+  const duration = seminar?.durationHours ? `${seminar.durationHours} hour(s)` : '';
+
+  const detailsRows = [
+    ['Date', dateStr],
+    timeStr ? ['Start Time', timeStr] : null,
+    ['Location', location],
+    duration ? ['Duration', duration] : null,
+  ].filter(Boolean);
+
+  const detailsHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 4px 0 18px; border-collapse: separate; border-spacing: 0;">
+      ${detailsRows.map(([label, value]) => `
+        <tr>
+          <td style="padding: 8px 0; font-family:${SANS}; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: ${COLORS.muted}; font-weight: 600; width: 110px; vertical-align: top;">
+            ${label}
+          </td>
+          <td style="padding: 8px 0; font-family:${SANS}; font-size: 15px; color: ${COLORS.text}; border-bottom: 1px solid #eef0f5;">
+            ${value}
+          </td>
+        </tr>`).join('')}
+    </table>`;
+
+  const html = buildEmail({
+    preheader: `Reminder: "${seminarTitle}" is tomorrow.`,
+    heading: 'Your seminar is tomorrow',
+    intro: `Hello ${employee.name || 'colleague'}, this is a friendly reminder that the GAD seminar you registered for is scheduled for <strong>tomorrow</strong>. We look forward to seeing you there.`,
+    highlight: {
+      label: 'Seminar',
+      value: seminarTitle,
+      caption: dateStr,
+    },
+    body: `<p style="margin: 0 0 10px;"><strong style="color:${COLORS.navyDeep};">Session details</strong></p>
+      ${detailsHtml}
+      <p style="margin: 0 0 10px; font-family:${SANS}; font-size: 14px; color:${COLORS.muted};">
+        Please arrive a few minutes early. If you can no longer attend, kindly cancel your registration in GIMS so the slot can be released.
+      </p>`,
+  });
+
+  await sendMailViaAPI({
+    to: employee.email,
+    subject: `Reminder: "${seminarTitle}" is tomorrow`,
+    text: `Hello ${employee.name || 'colleague'},\n\nThis is a reminder that "${seminarTitle}" is scheduled for ${dateStr}${timeStr ? ` at ${timeStr}` : ''}.\nLocation: ${location}\n\nWe look forward to seeing you there.\n\n— Xavier University GAD Office`,
+    html,
+  });
+};
+
 // =========================================================================
 // Bulk reminder runner
 // =========================================================================

@@ -13,6 +13,7 @@ import LearningMaterial from '../models/LearningMaterial.js';
 import Article from '../models/Article.js';
 import Evaluation from '../models/Evaluation.js';
 import { sendBulkReminders, sendReminderEmail } from '../services/emailService.js';
+import { runReminderTick } from '../services/seminarReminderScheduler.js';
 import User from '../models/User.js';
 import {
   buildCertificateDownload,
@@ -1569,6 +1570,17 @@ router.post('/notifications/reminders', authMiddleware, async (req, res, next) =
   try {
     const result = await sendBulkReminders();
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Manual trigger for the T-1 day seminar reminder scheduler.
+// Useful for testing without waiting for the hourly tick.
+router.post('/notifications/seminar-reminders/run', authMiddleware, async (req, res, next) => {
+  try {
+    const result = await runReminderTick();
+    res.json({ message: 'Seminar reminder tick complete', ...result });
   } catch (err) {
     next(err);
   }
