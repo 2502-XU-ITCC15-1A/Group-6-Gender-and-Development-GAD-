@@ -1,5 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import ExcelJS from 'exceljs';
 
 import Employee from '../models/Employee.js';
 import Seminar from '../models/Seminar.js';
@@ -34,18 +35,17 @@ const authMiddleware = (req, res, next) => {
 
 const RESET_PHRASE = 'GIMS MAINTENANCE';
 
-const csvCell = (value) => {
-  if (value === null || value === undefined || value === '') return '"None"';
-  if (typeof value === 'number') return String(value);
+const displayValue = (value) => {
+  if (value === null || value === undefined) return 'None';
+  if (typeof value === 'number') return value;
   const s = String(value);
-  if (s.trim() === '') return '"None"';
-  return `"${s.replace(/"/g, '""')}"`;
+  return s.trim() === '' ? 'None' : s;
 };
 
 const formatDate = (d) => {
-  if (!d) return '';
+  if (!d) return 'None';
   const dt = d instanceof Date ? d : new Date(d);
-  if (Number.isNaN(dt.getTime())) return '';
+  if (Number.isNaN(dt.getTime())) return 'None';
   return dt.toISOString().slice(0, 10);
 };
 
@@ -115,45 +115,42 @@ router.get('/preview', authMiddleware, async (req, res, next) => {
   }
 });
 
-// Build masterlist rows for either live or archived data.
-const buildMasterlistRows = async (schoolYear, { source }) => {
-  const header = [
-    'Employee Name',
-    'Department',
-    'Position',
-    'Email',
-    'Seminar Title',
-    'Seminar Date',
-    'Duration (hrs)',
-    'Status',
-    'Certificate Issued',
-    'Certificate Code',
-    'Certificate Issued At',
-    'School Year',
-  ];
+const MASTERLIST_COLUMNS = [
+  { header: 'Employee Name',        key: 'name',           width: 28 },
+  { header: 'Department',           key: 'department',     width: 32 },
+  { header: 'Position',             key: 'position',       width: 22 },
+  { header: 'Email',                key: 'email',          width: 30 },
+  { header: 'Seminar Title',        key: 'seminarTitle',   width: 32 },
+  { header: 'Seminar Date',         key: 'seminarDate',    width: 14 },
+  { header: 'Duration (hrs)',       key: 'duration',       width: 14 },
+  { header: 'Status',               key: 'status',         width: 16 },
+  { header: 'Certificate Issued',   key: 'certIssued',     width: 18 },
+  { header: 'Certificate Code',     key: 'certCode',       width: 26 },
+  { header: 'Certificate Issued At', key: 'certIssuedAt',  width: 18 },
+  { header: 'School Year',          key: 'schoolYear',     width: 14 },
+];
 
+const buildMasterlistData = async (schoolYear, { source }) => {
   if (source === 'archive') {
     const regs = await RegistrationArchive.find({ schoolYear }).lean();
-    return [header].concat(
-      regs.map((r) => {
-        const s = r.seminarSnapshot || {};
-        const e = r.employeeSnapshot || {};
-        return [
-          e.name || '',
-          e.department || '',
-          e.position || '',
-          e.email || '',
-          s.title || '',
-          formatDate(s.date),
-          s.durationHours || '',
-          r.status || '',
-          r.certificateIssued ? 'Yes' : 'No',
-          r.certificateCode || '',
-          formatDate(r.certificateIssuedAt),
-          r.schoolYear || '',
-        ];
-      })
-    );
+    return regs.map((r) => {
+      const s = r.seminarSnapshot || {};
+      const e = r.employeeSnapshot || {};
+      return {
+        name: displayValue(e.name),
+        department: displayValue(e.department),
+        position: displayValue(e.position),
+        email: displayValue(e.email),
+        seminarTitle: displayValue(s.title),
+        seminarDate: formatDate(s.date),
+        duration: displayValue(s.durationHours),
+        status: displayValue(r.status),
+        certIssued: r.certificateIssued ? 'Yes' : 'No',
+        certCode: displayValue(r.certificateCode),
+        certIssuedAt: formatDate(r.certificateIssuedAt),
+        schoolYear: displayValue(r.schoolYear),
+      };
+    });
   }
 
   const seminars = await findSeminarsForSchoolYear(schoolYear);
@@ -164,44 +161,158 @@ const buildMasterlistRows = async (schoolYear, { source }) => {
   const employees = await Employee.find({ _id: { $in: employeeIds } }).lean();
   const empMap = new Map(employees.map((e) => [String(e._id), e]));
 
-  return [header].concat(
-    registrations.map((r) => {
-      const s = seminarMap.get(String(r.seminarID)) || {};
-      const e = empMap.get(String(r.employeeID)) || {};
-      return [
-        e.name || '',
-        e.department || '',
-        e.position || '',
-        e.email || '',
-        s.title || '',
-        formatDate(s.date),
-        s.durationHours || '',
-        r.status || '',
-        r.certificateIssued ? 'Yes' : 'No',
-        r.certificateCode || '',
-        formatDate(r.certificateIssuedAt),
-        r.schoolYear || schoolYear,
-      ];
-    })
+  return registrations.map((r) => {
+    const s = seminarMap.get(String(r.seminarID)) || {};
+    const e = empMap.get(String(r.employeeID)) || {};
+    return {
+      name: displayValue(e.name),
+      department: displayValue(e.department),
+      position: displayValue(e.position),
+      email: displayValue(e.email),
+      seminarTitle: displayValue(s.title),
+      seminarDate: formatDate(s.date),
+      duration: displayValue(s.durationHours),
+      status: displayValue(r.status),
+      certIssued: r.certificateIssued ? 'Yes' : 'No',
+      certCode: displayValue(r.certificateCode),
+      certIssuedAt: formatDate(r.certificateIssuedAt),
+      schoolYear: displayValue(r.schoolYear || schoolYear),
+    };
+  });
+};
+
+const buildMasterlistWorkbook = async (schoolYear, rows) => {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'GIMS — GAD Integrated Management System';
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet(`SY ${schoolYear}`, {
+    views: [{ state: 'frozen', ySplit: 4 }],
+  });
+
+  const colCount = MASTERLIST_COLUMNS.length;
+  const lastColLetter = ws.getColumn(colCount).letter;
+
+  // Title row
+  ws.mergeCells(`A1:${lastColLetter}1`);
+  const titleCell = ws.getCell('A1');
+  titleCell.value = `GIMS YEARLY ARCHIVE • SCHOOL YEAR ${schoolYear.replace('-', '–')}`;
+  titleCell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FF14264F' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 28;
+
+  // Subtitle row
+  ws.mergeCells(`A2:${lastColLetter}2`);
+  const subCell = ws.getCell('A2');
+  subCell.value = 'Xavier University – Ateneo de Cagayan • GAD Integrated Management System';
+  subCell.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF6B7280' } };
+  subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(2).height = 18;
+
+  // Spacer row 3 (left blank by design)
+  ws.getRow(3).height = 8;
+
+  // Header row 4
+  ws.columns = MASTERLIST_COLUMNS.map((c) => ({ key: c.key, width: c.width }));
+  const headerRow = ws.getRow(4);
+  MASTERLIST_COLUMNS.forEach((col, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = col.header;
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF203A73' },
+    };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = {
+      top:    { style: 'thin', color: { argb: 'FF14264F' } },
+      bottom: { style: 'thin', color: { argb: 'FF14264F' } },
+      left:   { style: 'thin', color: { argb: 'FF14264F' } },
+      right:  { style: 'thin', color: { argb: 'FF14264F' } },
+    };
+  });
+  headerRow.height = 26;
+
+  // Data rows
+  rows.forEach((row, idx) => {
+    const excelRow = ws.addRow(row);
+    excelRow.height = 20;
+    const isAlt = idx % 2 === 1;
+    excelRow.eachCell({ includeEmpty: true }, (cell) => {
+      cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF111827' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      cell.border = {
+        top:    { style: 'hair', color: { argb: 'FFE5E7EB' } },
+        bottom: { style: 'hair', color: { argb: 'FFE5E7EB' } },
+        left:   { style: 'hair', color: { argb: 'FFE5E7EB' } },
+        right:  { style: 'hair', color: { argb: 'FFE5E7EB' } },
+      };
+      if (isAlt) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF6F8FC' },
+        };
+      }
+    });
+
+    // Center-align short, code-like, or status columns
+    ['seminarDate', 'duration', 'status', 'certIssued', 'certCode', 'certIssuedAt', 'schoolYear']
+      .forEach((key) => {
+        const cell = excelRow.getCell(key);
+        cell.alignment = { ...cell.alignment, horizontal: 'center' };
+      });
+
+    // Color the certificate Yes/No
+    const ci = excelRow.getCell('certIssued');
+    if (ci.value === 'Yes') {
+      ci.font = { ...ci.font, bold: true, color: { argb: 'FF0A7A0A' } };
+    } else if (ci.value === 'None' || ci.value === 'No') {
+      ci.font = { ...ci.font, color: { argb: 'FF6B7280' } };
+    }
+
+    // Dim "None" cells so empties read as muted
+    excelRow.eachCell({ includeEmpty: false }, (cell) => {
+      if (cell.value === 'None') {
+        cell.font = { ...cell.font, italic: true, color: { argb: 'FF9CA3AF' } };
+      }
+    });
+  });
+
+  // If empty result, add a friendly note row
+  if (rows.length === 0) {
+    ws.mergeCells(`A5:${lastColLetter}5`);
+    const empty = ws.getCell('A5');
+    empty.value = `No registrations found for school year ${schoolYear}.`;
+    empty.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF6B7280' } };
+    empty.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(5).height = 28;
+  }
+
+  return wb;
+};
+
+const sendWorkbook = async (res, filename, wb) => {
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   );
-};
-
-const sendCsv = (res, filename, rows) => {
-  const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.send(csv);
+  await wb.xlsx.write(res);
+  res.end();
 };
 
-// GET /api/admin/maintenance/masterlist.csv?schoolYear=YYYY-YYYY
-router.get('/masterlist.csv', authMiddleware, async (req, res, next) => {
+// GET /api/admin/maintenance/masterlist.xlsx?schoolYear=YYYY-YYYY
+router.get('/masterlist.xlsx', authMiddleware, async (req, res, next) => {
   try {
     const schoolYear = String(req.query.schoolYear || currentSchoolYear());
     if (!isValidSchoolYear(schoolYear)) {
       return res.status(400).json({ message: 'Invalid schoolYear' });
     }
-    const rows = await buildMasterlistRows(schoolYear, { source: 'live' });
-    sendCsv(res, `gims_masterlist_${schoolYear}.csv`, rows);
+    const rows = await buildMasterlistData(schoolYear, { source: 'live' });
+    const wb = await buildMasterlistWorkbook(schoolYear, rows);
+    await sendWorkbook(res, `GIMS_Masterlist_${schoolYear}.xlsx`, wb);
   } catch (err) {
     next(err);
   }
@@ -443,15 +554,16 @@ router.get('/archives/:schoolYear', authMiddleware, async (req, res, next) => {
   }
 });
 
-// GET /api/admin/maintenance/archives/:schoolYear/masterlist.csv
-router.get('/archives/:schoolYear/masterlist.csv', authMiddleware, async (req, res, next) => {
+// GET /api/admin/maintenance/archives/:schoolYear/masterlist.xlsx
+router.get('/archives/:schoolYear/masterlist.xlsx', authMiddleware, async (req, res, next) => {
   try {
     const schoolYear = String(req.params.schoolYear);
     if (!isValidSchoolYear(schoolYear)) {
       return res.status(400).json({ message: 'Invalid schoolYear' });
     }
-    const rows = await buildMasterlistRows(schoolYear, { source: 'archive' });
-    sendCsv(res, `gims_masterlist_${schoolYear}.csv`, rows);
+    const rows = await buildMasterlistData(schoolYear, { source: 'archive' });
+    const wb = await buildMasterlistWorkbook(schoolYear, rows);
+    await sendWorkbook(res, `GIMS_Masterlist_${schoolYear}.xlsx`, wb);
   } catch (err) {
     next(err);
   }

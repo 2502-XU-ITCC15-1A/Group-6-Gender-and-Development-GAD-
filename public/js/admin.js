@@ -2957,9 +2957,9 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadStatus.textContent = 'Enter a school year first.';
         return;
       }
-      downloadStatus.textContent = 'Generating CSV…';
+      downloadStatus.textContent = 'Generating XLSX…';
       try {
-        const res = await authFetch(`/api/admin/maintenance/masterlist.csv?schoolYear=${encodeURIComponent(sy)}`);
+        const res = await authFetch(`/api/admin/maintenance/masterlist.xlsx?schoolYear=${encodeURIComponent(sy)}`);
         if (!res.ok) {
           const t = await res.text();
           throw new Error(t || 'Download failed');
@@ -2968,14 +2968,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `gims_masterlist_${sy}.csv`;
+        a.download = `GIMS_Masterlist_${sy}.xlsx`;
         document.body.appendChild(a);
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         csvDownloaded = true;
         enableStep2Onwards();
-        downloadStatus.textContent = 'CSV downloaded. You may now proceed.';
+        downloadStatus.textContent = 'Masterlist downloaded. You may now proceed.';
       } catch (err) {
         downloadStatus.textContent = err.message || 'Download failed.';
       }
@@ -3041,7 +3041,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div style="display:flex; gap:0.4rem;">
               <button class="btn secondary" type="button" data-archive-view="${escapeHtml(a.schoolYear)}">View</button>
-              <button class="btn secondary" type="button" data-archive-csv="${escapeHtml(a.schoolYear)}">Download CSV</button>
+              <button class="btn secondary" type="button" data-archive-csv="${escapeHtml(a.schoolYear)}">Download XLSX</button>
             </div>
           </div>
         `).join('');
@@ -3092,13 +3092,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const downloadArchiveCsv = async (sy) => {
       try {
-        const res = await authFetch(`/api/admin/maintenance/archives/${encodeURIComponent(sy)}/masterlist.csv`);
+        const res = await authFetch(`/api/admin/maintenance/archives/${encodeURIComponent(sy)}/masterlist.xlsx`);
         if (!res.ok) throw new Error('Download failed');
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `gims_masterlist_${sy}.csv`;
+        a.download = `GIMS_Masterlist_${sy}.xlsx`;
         document.body.appendChild(a);
         a.click();
         a.remove();

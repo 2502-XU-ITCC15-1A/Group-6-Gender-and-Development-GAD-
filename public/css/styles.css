@@ -1845,8 +1845,21 @@ textarea.is-invalid {
 .maint-step-body p.muted { margin: 0 0 0.55rem; }
 .maint-step-body > * + * { margin-top: 0.55rem; }
 .maint-step-check {
-  display: flex;
-  gap: 0.5rem;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 1.1rem 1fr;
+  column-gap: 0.6rem;
+  align-items: start;
   margin: 0;
+  line-height: 1.45;
+}
+.maint-step-check input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  margin-top: 0.18rem;
+  flex: none;
+  cursor: pointer;
+}
+.maint-step-check span {
+  display: block;
 }
