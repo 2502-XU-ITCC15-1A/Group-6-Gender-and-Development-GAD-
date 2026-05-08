@@ -158,6 +158,7 @@ seminarsBtn?.addEventListener('click', async () => {
         const remaining = (s.capacity || 0) - (Array.isArray(s.registeredEmployees) ? s.registeredEmployees.length : 0);
         const slotsText = `${Math.max(remaining, 0)} / ${s.capacity}`;
         const locationLine = s.location ? `Location: ${escapeHtml(s.location)}<br />` : '';
+        const resourcePersonLine = s.resourcePerson ? `Resource Person: ${escapeHtml(s.resourcePerson)}<br />` : '';
         const desc = escapeHtml(s.description || '');
         const showToggle = (s.description || '').length > 140;
         return `
@@ -170,6 +171,7 @@ seminarsBtn?.addEventListener('click', async () => {
             <p class="muted small">
               Date: ${escapeHtml(date)}<br />
               ${locationLine}
+              ${resourcePersonLine}
               Time: ${escapeHtml(s.startTime || '')}<br />
               Duration: ${escapeHtml(String(s.durationHours || ''))} hours<br />
               Mandatory: ${escapeHtml(mandatoryLabel)}<br />

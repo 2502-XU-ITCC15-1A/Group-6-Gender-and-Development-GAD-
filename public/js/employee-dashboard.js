@@ -601,6 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div style="font-weight:600; color: var(--xu-blue);">${escapeHtml(s.title)}</div>
                 <div class="muted small" style="margin-top:0.2rem; font-size:0.83rem;">${dateDisplay}</div>
                 ${s.location ? `<div class="muted small" style="font-size:0.82rem; margin-top:0.1rem;"><i class="fa-solid fa-location-dot" style="margin-right:0.25rem;"></i>${escapeHtml(s.location)}</div>` : ''}
+                ${s.resourcePerson ? `<div class="muted small" style="font-size:0.82rem; margin-top:0.1rem;"><i class="fa-solid fa-user" style="margin-right:0.25rem;"></i>${escapeHtml(s.resourcePerson)}</div>` : ''}
                 ${seriesLine}
                 ${sessionsScheduleHtml}
               </div>

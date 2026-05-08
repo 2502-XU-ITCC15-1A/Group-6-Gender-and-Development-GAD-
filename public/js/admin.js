@@ -1518,6 +1518,7 @@ document.addEventListener('DOMContentLoaded', () => {
     seminarEditForm.elements.mandatory.value = seminar.mandatory ? 'true' : 'false';
     seminarEditForm.elements.description.value = seminar.description || '';
     if (seminarEditForm.elements.location) seminarEditForm.elements.location.value = seminar.location || '';
+    if (seminarEditForm.elements.resourcePerson) seminarEditForm.elements.resourcePerson.value = seminar.resourcePerson || '';
     const editAutoSendCheckbox = document.getElementById('edit-auto-send-cert-checkbox');
     if (editAutoSendCheckbox) editAutoSendCheckbox.checked = Boolean(seminar.autoSendCertificates);
 
@@ -1764,6 +1765,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             <div class="muted small">${escapeHtml(formatDate(seminar.date))} - ${escapeHtml(formatTime(seminar.startTime))}</div>
             ${seminar.location ? `<div class="muted small">Location: ${escapeHtml(seminar.location)}</div>` : ''}
+            ${seminar.resourcePerson ? `<div class="muted small">Resource Person: ${escapeHtml(seminar.resourcePerson)}</div>` : ''}
             ${Array.isArray(seminar.sessions) && seminar.sessions.length > 1
               ? `<div class="muted small" style="color:var(--xu-blue); font-weight:600;">${seminar.sessions.length} sessions &bull; ${seminar.multiSessionType === 'pick-one' ? 'Pick one day' : 'Attend all'}</div>${buildAdminSessionsScheduleBlock(seminar.sessions, {
                   label: seminar.multiSessionType === 'pick-one' ? 'All session options' : 'Every session',
@@ -2599,6 +2601,7 @@ document.addEventListener('DOMContentLoaded', () => {
       title: formBody.title,
       description: formBody.description,
       location: formBody.location || '',
+      resourcePerson: formBody.resourcePerson || '',
       mandatory: formBody.mandatory,
       capacity: formBody.capacity,
       autoSendCertificates,
@@ -2685,6 +2688,7 @@ document.addEventListener('DOMContentLoaded', () => {
       title: body.title,
       description: body.description,
       location: body.location || '',
+      resourcePerson: body.resourcePerson || '',
       capacity: body.capacity,
       mandatory: body.mandatory,
       certificateReleaseMode: releaseMode,
