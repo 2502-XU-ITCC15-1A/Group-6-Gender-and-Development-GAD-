@@ -398,6 +398,9 @@
             <button class="dashboard-sidebar-link" type="button" data-nav="create-admin" id="admin-nav-create-admin">
               Admin Accounts
             </button>
+            <button class="dashboard-sidebar-link" type="button" data-nav="maintenance" id="admin-nav-maintenance">
+              Maintenance
+            </button>
           </div>
           <p class="muted small" style="margin-top: 1rem; color: rgba(255,255,255,0.85);">
             Admin session is based on your saved login token.
@@ -613,6 +616,84 @@
                 </div>
               </form>
               <p class="status" id="admin-create-admin-status"></p>
+            </div>
+          </section>
+
+          <section class="section-shell" id="admin-maintenance-section" style="display:none;">
+            <div class="card">
+              <div class="page-header">
+                <div>
+                  <h1>System Maintenance</h1>
+                  <p class="muted">End-of-school-year reset, masterlist export, and archive viewer.</p>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:1rem; border:1px solid #d99; background:#fff8f8;">
+                <h2 style="color:#a30000; margin-top:0;">End of School Year Reset</h2>
+                <p class="muted">
+                  This permanently moves the selected school year's seminars and certificate
+                  records into archive collections, then clears every employee's certificate
+                  count back to 0. Employees and admin accounts are not deleted.
+                </p>
+
+                <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end; margin-top:0.75rem;">
+                  <label style="margin-bottom:0; min-width:200px;">
+                    Target School Year
+                    <input type="text" id="maintenance-school-year" placeholder="2025-2026" />
+                  </label>
+                  <button class="btn secondary" type="button" id="maintenance-preview-btn">Preview Impact</button>
+                </div>
+                <div id="maintenance-preview-output" class="muted" style="margin-top:0.6rem;"></div>
+
+                <hr style="margin:1.25rem 0;" />
+
+                <h3 style="margin-top:0;">Step 1 — Download Masterlist CSV</h3>
+                <p class="muted">Save this to Google Drive (or another secure location) before resetting. You can re-download from the archive later if needed.</p>
+                <button class="btn secondary" type="button" id="maintenance-download-csv-btn">Download Masterlist CSV</button>
+                <p class="status" id="maintenance-download-status" style="margin-top:0.5rem;"></p>
+
+                <hr style="margin:1.25rem 0;" />
+
+                <h3 style="margin-top:0;">Step 2 — Confirm</h3>
+                <label style="display:flex; gap:0.5rem; align-items:flex-start; margin-bottom:0.5rem;">
+                  <input type="checkbox" id="maintenance-confirm-saved" disabled />
+                  <span>I have saved the masterlist CSV to a secure location (Google Drive, etc.).</span>
+                </label>
+                <label style="display:flex; gap:0.5rem; align-items:flex-start; margin-bottom:0.5rem;">
+                  <input type="checkbox" id="maintenance-confirm-understand" disabled />
+                  <span>I understand this will archive the school year and reset all employees' certificate counts to 0. This cannot be undone from the UI.</span>
+                </label>
+
+                <h3 style="margin-top:1rem;">Step 3 — Type the confirmation phrase</h3>
+                <p class="muted" style="margin:0 0 0.4rem;">Type <code>GIMS MAINTENANCE</code> exactly:</p>
+                <input type="text" id="maintenance-phrase" placeholder="GIMS MAINTENANCE" disabled style="max-width:320px;" />
+
+                <label style="display:block; margin-top:1rem;">
+                  Notes (optional)
+                  <textarea id="maintenance-notes" rows="2" placeholder="Reason for reset, year-end remarks, etc." disabled></textarea>
+                </label>
+
+                <div style="margin-top:1rem;">
+                  <button class="btn" type="button" id="maintenance-reset-btn" disabled
+                          style="background:#a30000; border-color:#a30000;">
+                    Reset School Year
+                  </button>
+                </div>
+                <p class="status" id="maintenance-reset-status" style="margin-top:0.6rem;"></p>
+              </div>
+
+              <div class="card" style="margin-top:1.25rem;">
+                <h2 style="margin-top:0;">Archived School Years</h2>
+                <p class="muted">Past school years that have been reset. Click one to view the seminars and employees archived that year, or re-download the masterlist CSV.</p>
+                <div id="maintenance-archives-list" style="margin-top:0.75rem;"></div>
+                <div id="maintenance-archive-detail" style="margin-top:1rem;"></div>
+              </div>
+
+              <div class="card" style="margin-top:1.25rem;">
+                <h2 style="margin-top:0;">Maintenance Log</h2>
+                <p class="muted">Audit trail of every reset action.</p>
+                <div id="maintenance-log-list" style="margin-top:0.75rem;"></div>
+              </div>
             </div>
           </section>
 

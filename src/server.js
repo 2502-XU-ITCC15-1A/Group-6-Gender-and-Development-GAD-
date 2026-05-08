@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import { connectDB } from './config/db.js';
 import { bootstrapHardcodedAdmins } from './config/bootstrapAccounts.js';
 import adminRoutes from './routes/admin.js';
+import maintenanceRoutes from './routes/maintenance.js';
 import employeeRoutes from './routes/employee.js';
 import authRoutes from './routes/auth.js';
 
@@ -49,6 +50,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/admin/maintenance', maintenanceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/employee', employeeRoutes);
 

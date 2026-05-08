@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { getSchoolYear } from '../services/schoolYearService.js';
 
 const SeminarSchema = new mongoose.Schema(
   {
@@ -56,12 +57,20 @@ const SeminarSchema = new mongoose.Schema(
       enum: ['all', 'pick-one'],
       default: 'all',
     },
+    schoolYear: { type: String, trim: true, default: null, index: true },
     isDeleted: { type: Boolean, default: false, index: true },
     deletedAt: { type: Date, default: null },
     deletePermanentlyAt: { type: Date, default: null, index: true },
   },
   { timestamps: { createdAt: true, updatedAt: true } }
 );
+
+SeminarSchema.pre('validate', function autoSchoolYear(next) {
+  if (!this.schoolYear && this.date) {
+    this.schoolYear = getSchoolYear(this.date);
+  }
+  next();
+});
 
 export default mongoose.model('Seminar', SeminarSchema);
 

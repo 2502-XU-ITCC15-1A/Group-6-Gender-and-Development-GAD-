@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { currentSchoolYear } from '../services/schoolYearService.js';
 
 const RegistrationSchema = new mongoose.Schema(
   {
@@ -51,6 +52,12 @@ const RegistrationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    schoolYear: {
+      type: String,
+      trim: true,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,
@@ -60,6 +67,13 @@ const RegistrationSchema = new mongoose.Schema(
 RegistrationSchema.index({ seminarID: 1, employeeID: 1 }, { unique: true });
 RegistrationSchema.index({ employeeID: 1, status: 1, certificateIssued: 1 });
 RegistrationSchema.index({ status: 1 });
+
+RegistrationSchema.pre('validate', function autoSchoolYear(next) {
+  if (!this.schoolYear) {
+    this.schoolYear = currentSchoolYear();
+  }
+  next();
+});
 
 export default mongoose.model('Registration', RegistrationSchema);
 

@@ -1418,6 +1418,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const isEmployees = key === 'employees';
     const isSeminars = key === 'seminars';
     const isCreateAdmin = key === 'create-admin';
+    const isMaintenance = key === 'maintenance';
 
     if (dashboardWrapperEl) {
       dashboardWrapperEl.style.display = isDashboard || isEmployees ? 'block' : 'none';
@@ -1427,6 +1428,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (createAdminSectionEl) {
       createAdminSectionEl.style.display = isCreateAdmin ? 'grid' : 'none';
+    }
+    const maintenanceSectionEl = document.getElementById('admin-maintenance-section');
+    if (maintenanceSectionEl) {
+      maintenanceSectionEl.style.display = isMaintenance ? 'block' : 'none';
+    }
+    if (isMaintenance && typeof window.gimsLoadMaintenance === 'function') {
+      window.gimsLoadMaintenance();
     }
 
     sidebarNavButtons.forEach((btn) => {
@@ -1440,6 +1448,7 @@ document.addEventListener('DOMContentLoaded', () => {
         seminars: 'Current View: Manage Seminars',
         'create-admin': 'Current View: Admin Accounts',
         employees: 'Current View: Employee Records',
+        maintenance: 'Current View: Maintenance',
       };
       moduleHintEl.textContent = hintMap[key] || 'Current View: Overview';
     }
@@ -2301,6 +2310,7 @@ document.addEventListener('DOMContentLoaded', () => {
         seminars: 'Current View: Manage Seminars',
         'create-admin': 'Current View: Admin Accounts',
         employees: 'Current View: Employee Records',
+        maintenance: 'Current View: Maintenance',
       };
       moduleHintEl.textContent = hintMap[key] || 'Current View: Overview';
     }
@@ -2798,6 +2808,278 @@ document.addEventListener('DOMContentLoaded', () => {
     adminToken = null;
     window.location.replace('/');
   });
+
+  // ---------------- Maintenance tab ----------------
+  (function setupMaintenance() {
+    const syInput = document.getElementById('maintenance-school-year');
+    const previewBtn = document.getElementById('maintenance-preview-btn');
+    const previewOut = document.getElementById('maintenance-preview-output');
+    const downloadBtn = document.getElementById('maintenance-download-csv-btn');
+    const downloadStatus = document.getElementById('maintenance-download-status');
+    const cbSaved = document.getElementById('maintenance-confirm-saved');
+    const cbUnderstand = document.getElementById('maintenance-confirm-understand');
+    const phraseInput = document.getElementById('maintenance-phrase');
+    const notesInput = document.getElementById('maintenance-notes');
+    const resetBtn = document.getElementById('maintenance-reset-btn');
+    const resetStatus = document.getElementById('maintenance-reset-status');
+    const archivesList = document.getElementById('maintenance-archives-list');
+    const archiveDetail = document.getElementById('maintenance-archive-detail');
+    const logList = document.getElementById('maintenance-log-list');
+
+    if (!syInput || !resetBtn) return;
+
+    const RESET_PHRASE = 'GIMS MAINTENANCE';
+    let csvDownloaded = false;
+
+    const escapeHtml = (s) => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+    const authFetch = (url, opts = {}) => fetch(url, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(opts.headers || {}),
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+
+    const updateGate = () => {
+      const ok = csvDownloaded && cbSaved.checked && cbUnderstand.checked
+        && phraseInput.value.trim() === RESET_PHRASE;
+      resetBtn.disabled = !ok;
+    };
+
+    const enableStep2Onwards = () => {
+      cbSaved.disabled = false;
+      cbUnderstand.disabled = false;
+      phraseInput.disabled = false;
+      notesInput.disabled = false;
+      updateGate();
+    };
+
+    [cbSaved, cbUnderstand].forEach((el) => el.addEventListener('change', updateGate));
+    phraseInput.addEventListener('input', updateGate);
+
+    previewBtn.addEventListener('click', async () => {
+      const sy = syInput.value.trim();
+      if (!sy) {
+        previewOut.textContent = 'Enter a school year first (e.g. 2025-2026).';
+        return;
+      }
+      previewOut.textContent = 'Loading preview…';
+      try {
+        const res = await authFetch(`/api/admin/maintenance/preview?schoolYear=${encodeURIComponent(sy)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Preview failed');
+        const c = data.counts || {};
+        previewOut.innerHTML =
+          `<strong>School year ${escapeHtml(data.schoolYear)}:</strong> ` +
+          `${c.seminars} seminar(s), ${c.registrations} registration(s), ` +
+          `${c.certificatesIssued} certificate(s) issued, ` +
+          `${c.employeesAffected} employee(s) will have their counts reset.`;
+      } catch (err) {
+        previewOut.textContent = err.message || 'Preview failed.';
+      }
+    });
+
+    downloadBtn.addEventListener('click', async () => {
+      const sy = syInput.value.trim();
+      if (!sy) {
+        downloadStatus.textContent = 'Enter a school year first.';
+        return;
+      }
+      downloadStatus.textContent = 'Generating CSV…';
+      try {
+        const res = await authFetch(`/api/admin/maintenance/masterlist.csv?schoolYear=${encodeURIComponent(sy)}`);
+        if (!res.ok) {
+          const t = await res.text();
+          throw new Error(t || 'Download failed');
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gims_masterlist_${sy}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        csvDownloaded = true;
+        enableStep2Onwards();
+        downloadStatus.textContent = 'CSV downloaded. You may now proceed.';
+      } catch (err) {
+        downloadStatus.textContent = err.message || 'Download failed.';
+      }
+    });
+
+    resetBtn.addEventListener('click', async () => {
+      const sy = syInput.value.trim();
+      if (!confirm(`Final confirmation:\n\nReset school year ${sy}?\n\nThis archives all seminars and registrations from that year and clears every employee's certificate count. This cannot be undone from the UI.`)) {
+        return;
+      }
+      resetBtn.disabled = true;
+      resetStatus.textContent = 'Resetting…';
+      try {
+        const res = await authFetch('/api/admin/maintenance/reset-school-year', {
+          method: 'POST',
+          body: JSON.stringify({
+            schoolYear: sy,
+            confirmPhrase: phraseInput.value.trim(),
+            notes: notesInput.value.trim(),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Reset failed');
+        const c = data.counts || {};
+        resetStatus.innerHTML =
+          `<span style="color:#0a7a0a;"><strong>Reset complete.</strong> ` +
+          `Archived ${c.registrationsArchived} registration(s) and ` +
+          `${c.seminarsArchived} seminar(s) across ${c.employeesAffected} employee(s).</span>`;
+        // Reset gate
+        csvDownloaded = false;
+        cbSaved.checked = false;
+        cbUnderstand.checked = false;
+        phraseInput.value = '';
+        notesInput.value = '';
+        cbSaved.disabled = true;
+        cbUnderstand.disabled = true;
+        phraseInput.disabled = true;
+        notesInput.disabled = true;
+        updateGate();
+        loadArchives();
+        loadLogs();
+      } catch (err) {
+        resetStatus.textContent = err.message || 'Reset failed.';
+        updateGate();
+      }
+    });
+
+    const loadArchives = async () => {
+      archivesList.innerHTML = '<p class="muted">Loading…</p>';
+      try {
+        const res = await authFetch('/api/admin/maintenance/archives');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to load archives');
+        if (!data.archives.length) {
+          archivesList.innerHTML = '<p class="muted">No archived school years yet.</p>';
+          return;
+        }
+        archivesList.innerHTML = data.archives.map((a) => `
+          <div style="border:1px solid var(--border); border-radius:0.5rem; padding:0.7rem; margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+            <div>
+              <strong>${escapeHtml(a.schoolYear)}</strong>
+              <span class="muted"> — ${a.seminars} seminar(s), ${a.registrations} registration(s), ${a.certificates} cert(s), ${a.employees} employee(s)</span>
+            </div>
+            <div style="display:flex; gap:0.4rem;">
+              <button class="btn secondary" type="button" data-archive-view="${escapeHtml(a.schoolYear)}">View</button>
+              <button class="btn secondary" type="button" data-archive-csv="${escapeHtml(a.schoolYear)}">Download CSV</button>
+            </div>
+          </div>
+        `).join('');
+        archivesList.querySelectorAll('[data-archive-view]').forEach((btn) => {
+          btn.addEventListener('click', () => viewArchive(btn.getAttribute('data-archive-view')));
+        });
+        archivesList.querySelectorAll('[data-archive-csv]').forEach((btn) => {
+          btn.addEventListener('click', () => downloadArchiveCsv(btn.getAttribute('data-archive-csv')));
+        });
+      } catch (err) {
+        archivesList.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Failed to load.')}</p>`;
+      }
+    };
+
+    const viewArchive = async (sy) => {
+      archiveDetail.innerHTML = `<p class="muted">Loading ${escapeHtml(sy)}…</p>`;
+      try {
+        const res = await authFetch(`/api/admin/maintenance/archives/${encodeURIComponent(sy)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to load');
+        const seminarsHtml = (data.seminars || []).map((s) => `
+          <li><strong>${escapeHtml(s.title)}</strong> <span class="muted">— ${s.date ? new Date(s.date).toLocaleDateString() : ''}, ${escapeHtml(s.location || '')}</span></li>
+        `).join('');
+        const employeesHtml = (data.employees || []).map((e) => `
+          <details style="margin-bottom:0.4rem;">
+            <summary><strong>${escapeHtml(e.employee.name || '(unknown)')}</strong> <span class="muted">— ${escapeHtml(e.employee.department || '')}, ${e.registrations.length} record(s)</span></summary>
+            <ul style="margin:0.4rem 0 0.4rem 1.2rem;">
+              ${e.registrations.map((r) => `
+                <li>${escapeHtml(r.seminar.title || '(seminar)')} — ${escapeHtml(r.status || '')}${r.certificateIssued ? ` ✓ cert ${escapeHtml(r.certificateCode || '')}` : ''}</li>
+              `).join('')}
+            </ul>
+          </details>
+        `).join('');
+        archiveDetail.innerHTML = `
+          <div class="card" style="margin-top:0.5rem;">
+            <h3 style="margin-top:0;">Archive — ${escapeHtml(data.schoolYear)}</h3>
+            <p class="muted">${data.counts.seminars} seminar(s), ${data.counts.registrations} registration(s), ${data.counts.employees} employee(s).</p>
+            <h4>Seminars</h4>
+            <ul>${seminarsHtml || '<li class="muted">None</li>'}</ul>
+            <h4>Employees</h4>
+            ${employeesHtml || '<p class="muted">None</p>'}
+          </div>
+        `;
+      } catch (err) {
+        archiveDetail.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Failed.')}</p>`;
+      }
+    };
+
+    const downloadArchiveCsv = async (sy) => {
+      try {
+        const res = await authFetch(`/api/admin/maintenance/archives/${encodeURIComponent(sy)}/masterlist.csv`);
+        if (!res.ok) throw new Error('Download failed');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gims_masterlist_${sy}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (err) {
+        alert(err.message || 'Download failed.');
+      }
+    };
+
+    const loadLogs = async () => {
+      logList.innerHTML = '<p class="muted">Loading…</p>';
+      try {
+        const res = await authFetch('/api/admin/maintenance/logs');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed');
+        if (!data.logs.length) {
+          logList.innerHTML = '<p class="muted">No maintenance actions yet.</p>';
+          return;
+        }
+        logList.innerHTML = data.logs.map((l) => `
+          <div style="border:1px solid var(--border); border-radius:0.5rem; padding:0.6rem; margin-bottom:0.4rem;">
+            <div><strong>${escapeHtml(l.action)}</strong> — SY ${escapeHtml(l.schoolYear)}</div>
+            <div class="muted small">
+              ${new Date(l.triggeredAt).toLocaleString()} by ${escapeHtml(l.triggeredByName || l.triggeredByEmail || 'admin')}
+              — ${l.counts?.registrationsArchived || 0} regs, ${l.counts?.seminarsArchived || 0} seminars, ${l.counts?.employeesAffected || 0} employees
+              ${l.notes ? `<br/><em>${escapeHtml(l.notes)}</em>` : ''}
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        logList.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Failed.')}</p>`;
+      }
+    };
+
+    const populateDefaultSY = async () => {
+      try {
+        const res = await authFetch('/api/admin/maintenance/current-school-year');
+        const data = await res.json();
+        if (data.schoolYear && !syInput.value) syInput.value = data.schoolYear;
+      } catch {}
+    };
+
+    window.gimsLoadMaintenance = () => {
+      populateDefaultSY();
+      loadArchives();
+      loadLogs();
+    };
+  })();
+  // -------------- end Maintenance tab --------------
 
   initCalendarToggle('create');
   initCalendarToggle('edit');
