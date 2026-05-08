@@ -2168,6 +2168,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const notifDropdownEl = document.getElementById('admin-notif-dropdown');
   const notifListEl = document.getElementById('admin-notif-list');
   const notifRefreshBtn = document.getElementById('admin-notif-refresh-btn');
+  const notifClearBtn = document.getElementById('admin-notif-clear-btn');
+  const adminDismissedNotifKey = 'gims_admin_dismissed_notifications';
+  let latestAdminNotifItems = [];
+
+  const getAdminNotifKey = (item) => [
+    item?.type || '',
+    item?.seminarId || '',
+    item?.count || 0,
+    item?.timestamp ? new Date(item.timestamp).getTime() : '',
+  ].join(':');
+
+  const loadDismissedAdminNotifs = () => {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(adminDismissedNotifKey) || '[]');
+      return Array.isArray(parsed) ? new Set(parsed) : new Set();
+    } catch {
+      return new Set();
+    }
+  };
+
+  const saveDismissedAdminNotifs = (keys) => {
+    window.localStorage.setItem(adminDismissedNotifKey, JSON.stringify(Array.from(keys)));
+  };
 
   const formatNotifTime = (date) => {
     if (!date) return '';
@@ -2221,13 +2244,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await authedFetch('/api/admin/notifications/bell');
       if (!res.ok) return;
       const data = await res.json();
-      const items = Array.isArray(data?.items) ? data.items : [];
+      const dismissedKeys = loadDismissedAdminNotifs();
+      const items = (Array.isArray(data?.items) ? data.items : [])
+        .filter((item) => !dismissedKeys.has(getAdminNotifKey(item)));
       const unread = Number(data?.unreadCount || items.length || 0);
+      latestAdminNotifItems = items;
 
       renderAdminNotifications(items);
 
-      if (unread > 0) {
-        notifBadgeEl.textContent = unread > 99 ? '99+' : String(unread);
+      if (items.length > 0) {
+        notifBadgeEl.textContent = items.length > 99 ? '99+' : String(items.length);
         notifBadgeEl.style.display = 'flex';
       } else {
         notifBadgeEl.style.display = 'none';
@@ -2253,6 +2279,18 @@ document.addEventListener('DOMContentLoaded', () => {
   notifRefreshBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     updateAdminNotificationBell();
+  });
+
+  notifClearBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (latestAdminNotifItems.length === 0) return;
+    if (!window.confirm('Clear all notifications? This cannot be undone.')) return;
+    const dismissedKeys = loadDismissedAdminNotifs();
+    latestAdminNotifItems.forEach((item) => dismissedKeys.add(getAdminNotifKey(item)));
+    saveDismissedAdminNotifs(dismissedKeys);
+    latestAdminNotifItems = [];
+    renderAdminNotifications([]);
+    if (notifBadgeEl) notifBadgeEl.style.display = 'none';
   });
 
   document.addEventListener('click', (e) => {
