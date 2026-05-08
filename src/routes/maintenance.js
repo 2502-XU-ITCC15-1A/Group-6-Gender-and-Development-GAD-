@@ -35,7 +35,10 @@ const authMiddleware = (req, res, next) => {
 const RESET_PHRASE = 'GIMS MAINTENANCE';
 
 const csvCell = (value) => {
-  const s = value === null || value === undefined ? '' : String(value);
+  if (value === null || value === undefined || value === '') return '"None"';
+  if (typeof value === 'number') return String(value);
+  const s = String(value);
+  if (s.trim() === '') return '"None"';
   return `"${s.replace(/"/g, '""')}"`;
 };
 

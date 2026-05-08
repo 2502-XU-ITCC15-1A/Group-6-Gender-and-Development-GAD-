@@ -1538,19 +1538,26 @@ router.get('/reports/employees.csv', authMiddleware, async (req, res, next) => {
       buildActiveSeminarIdSet(),
     ]);
 
-    const header = 'Name,Department,Position,Seminars Attended\n';
-    const rows = employees
-      .map((e) => {
-        const attended = countActiveAttendedSeminars(e.seminarsAttended, activeSeminarIdSet);
-        return `"${(e.name || '').replace(/"/g, '""')}","${(e.department || '').replace(
-          /"/g,
-          '""'
-        )}","${(e.position || '').replace(/"/g, '""')}",${attended}`;
-      })
-      .join('\n');
+    const csvCell = (value) => {
+      if (value === null || value === undefined || value === '') return '"None"';
+      if (typeof value === 'number') return String(value);
+      const s = String(value);
+      if (s.trim() === '') return '"None"';
+      return `"${s.replace(/"/g, '""')}"`;
+    };
 
-    const csv = header + rows;
-    res.setHeader('Content-Type', 'text/csv');
+    const headers = ['Name', 'Department', 'Position', 'Seminars Attended'];
+    const rows = [headers].concat(
+      employees.map((e) => [
+        e.name,
+        e.department,
+        e.position,
+        countActiveAttendedSeminars(e.seminarsAttended, activeSeminarIdSet),
+      ])
+    );
+
+    const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="gims_employees.csv"');
     res.send(csv);
   } catch (err) {

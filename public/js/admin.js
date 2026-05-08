@@ -2873,6 +2873,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const RESET_PHRASE = 'GIMS MAINTENANCE';
     let csvDownloaded = false;
 
+    const stepEls = {
+      1: document.querySelector('[data-step="1"]'),
+      2: document.querySelector('[data-step="2"]'),
+      3: document.querySelector('[data-step="3"]'),
+    };
+    const setStepState = (n, state) => {
+      const el = stepEls[n];
+      if (!el) return;
+      el.classList.remove('is-pending', 'is-active', 'is-complete');
+      el.classList.add(state);
+    };
+    const refreshSteps = () => {
+      const step2Done = cbSaved.checked && cbUnderstand.checked;
+      const phraseDone = phraseInput.value.trim() === RESET_PHRASE;
+
+      setStepState(1, csvDownloaded ? 'is-complete' : 'is-active');
+
+      if (!csvDownloaded) setStepState(2, 'is-pending');
+      else setStepState(2, step2Done ? 'is-complete' : 'is-active');
+
+      if (!csvDownloaded || !step2Done) setStepState(3, 'is-pending');
+      else setStepState(3, phraseDone ? 'is-complete' : 'is-active');
+    };
+
     const escapeHtml = (s) => String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -2890,6 +2914,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const ok = csvDownloaded && cbSaved.checked && cbUnderstand.checked
         && phraseInput.value.trim() === RESET_PHRASE;
       resetBtn.disabled = !ok;
+      refreshSteps();
     };
 
     const enableStep2Onwards = () => {
@@ -2902,6 +2927,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     [cbSaved, cbUnderstand].forEach((el) => el.addEventListener('change', updateGate));
     phraseInput.addEventListener('input', updateGate);
+    refreshSteps();
 
     previewBtn.addEventListener('click', async () => {
       const sy = syInput.value.trim();

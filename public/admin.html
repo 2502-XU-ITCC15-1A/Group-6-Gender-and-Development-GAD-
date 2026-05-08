@@ -701,39 +701,52 @@
 
                 <hr style="margin:1.25rem 0;" />
 
-                <h3 style="margin-top:0;">Step 1 — Download Masterlist CSV</h3>
-                <p class="muted">Save this to Google Drive (or another secure location) before resetting. You can re-download from the archive later if needed.</p>
-                <button class="btn secondary" type="button" id="maintenance-download-csv-btn">Download Masterlist CSV</button>
-                <p class="status" id="maintenance-download-status" style="margin-top:0.5rem;"></p>
+                <ol class="maint-checklist" id="maintenance-checklist">
+                  <li class="maint-step is-active" data-step="1">
+                    <div class="maint-step-number">1</div>
+                    <div class="maint-step-body">
+                      <h3>Download Masterlist CSV</h3>
+                      <p class="muted">Save this to Google Drive (or another secure location) before resetting. You can re-download from the archive later if needed.</p>
+                      <button class="btn secondary" type="button" id="maintenance-download-csv-btn">Download Masterlist CSV</button>
+                      <p class="status" id="maintenance-download-status"></p>
+                    </div>
+                  </li>
 
-                <hr style="margin:1.25rem 0;" />
+                  <li class="maint-step is-pending" data-step="2">
+                    <div class="maint-step-number">2</div>
+                    <div class="maint-step-body">
+                      <h3>Confirm</h3>
+                      <label class="maint-step-check">
+                        <input type="checkbox" id="maintenance-confirm-saved" disabled />
+                        <span>I have saved the masterlist CSV to a secure location (Google Drive, etc.).</span>
+                      </label>
+                      <label class="maint-step-check">
+                        <input type="checkbox" id="maintenance-confirm-understand" disabled />
+                        <span>I understand this will archive the school year and reset all employees' certificate counts to 0. This cannot be undone from the UI.</span>
+                      </label>
+                    </div>
+                  </li>
 
-                <h3 style="margin-top:0;">Step 2 — Confirm</h3>
-                <label style="display:flex; gap:0.5rem; align-items:flex-start; margin-bottom:0.5rem;">
-                  <input type="checkbox" id="maintenance-confirm-saved" disabled />
-                  <span>I have saved the masterlist CSV to a secure location (Google Drive, etc.).</span>
-                </label>
-                <label style="display:flex; gap:0.5rem; align-items:flex-start; margin-bottom:0.5rem;">
-                  <input type="checkbox" id="maintenance-confirm-understand" disabled />
-                  <span>I understand this will archive the school year and reset all employees' certificate counts to 0. This cannot be undone from the UI.</span>
-                </label>
-
-                <h3 style="margin-top:1rem;">Step 3 — Type the confirmation phrase</h3>
-                <p class="muted" style="margin:0 0 0.4rem;">Type <code>GIMS MAINTENANCE</code> exactly:</p>
-                <input type="text" id="maintenance-phrase" placeholder="GIMS MAINTENANCE" disabled style="max-width:320px;" />
-
-                <label style="display:block; margin-top:1rem;">
-                  Notes (optional)
-                  <textarea id="maintenance-notes" rows="2" placeholder="Reason for reset, year-end remarks, etc." disabled></textarea>
-                </label>
-
-                <div style="margin-top:1rem;">
-                  <button class="btn" type="button" id="maintenance-reset-btn" disabled
-                          style="background:#a30000; border-color:#a30000;">
-                    Reset School Year
-                  </button>
-                </div>
-                <p class="status" id="maintenance-reset-status" style="margin-top:0.6rem;"></p>
+                  <li class="maint-step is-pending" data-step="3">
+                    <div class="maint-step-number">3</div>
+                    <div class="maint-step-body">
+                      <h3>Type the confirmation phrase</h3>
+                      <p class="muted">Type <code>GIMS MAINTENANCE</code> exactly:</p>
+                      <input type="text" id="maintenance-phrase" placeholder="GIMS MAINTENANCE" disabled style="max-width:320px;" />
+                      <label style="display:block;">
+                        Notes (optional)
+                        <textarea id="maintenance-notes" rows="2" placeholder="Reason for reset, year-end remarks, etc." disabled></textarea>
+                      </label>
+                      <div>
+                        <button class="btn" type="button" id="maintenance-reset-btn" disabled
+                                style="background:#a30000; border-color:#a30000;">
+                          Reset School Year
+                        </button>
+                      </div>
+                      <p class="status" id="maintenance-reset-status"></p>
+                    </div>
+                  </li>
+                </ol>
               </div>
 
               <div class="card" style="margin-top:1.25rem;">
