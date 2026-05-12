@@ -3042,6 +3042,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div style="display:flex; gap:0.4rem;">
               <button class="btn secondary" type="button" data-archive-view="${escapeHtml(a.schoolYear)}">View</button>
               <button class="btn secondary" type="button" data-archive-csv="${escapeHtml(a.schoolYear)}">Download XLSX</button>
+              <button class="btn secondary" type="button" data-archive-restore="${escapeHtml(a.schoolYear)}">Unarchive</button>
             </div>
           </div>
         `).join('');
@@ -3050,6 +3051,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         archivesList.querySelectorAll('[data-archive-csv]').forEach((btn) => {
           btn.addEventListener('click', () => downloadArchiveCsv(btn.getAttribute('data-archive-csv')));
+        });
+        archivesList.querySelectorAll('[data-archive-restore]').forEach((btn) => {
+          btn.addEventListener('click', () => restoreArchive(btn.getAttribute('data-archive-restore')));
         });
       } catch (err) {
         archivesList.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Failed to load.')}</p>`;
@@ -3087,6 +3091,40 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
       } catch (err) {
         archiveDetail.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Failed.')}</p>`;
+      }
+    };
+
+    const restoreArchive = async (sy) => {
+      const phrase = window.prompt(
+        `Unarchive school year ${sy}?\n\n` +
+        `This moves every seminar and registration from this archive back into ` +
+        `the live collections and re-adds them to each employee's record. ` +
+        `The archive entry for ${sy} will be removed.\n\n` +
+        `Type "GIMS MAINTENANCE" to confirm:`
+      );
+      if (phrase === null) return;
+      if (phrase.trim() !== 'GIMS MAINTENANCE') {
+        alert('Confirmation phrase did not match. Restore cancelled.');
+        return;
+      }
+      try {
+        const res = await authFetch(`/api/admin/maintenance/archives/${encodeURIComponent(sy)}/restore`, {
+          method: 'POST',
+          body: JSON.stringify({ confirmPhrase: phrase.trim() }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Restore failed');
+        const c = data.counts || {};
+        alert(
+          `Restored school year ${sy}.\n\n` +
+          `${c.seminarsRestored || 0} seminar(s), ${c.registrationsRestored || 0} registration(s), ` +
+          `${c.employeesAffected || 0} employee(s) updated.`
+        );
+        archiveDetail.innerHTML = '';
+        loadArchives();
+        loadLogs();
+      } catch (err) {
+        alert(err.message || 'Restore failed.');
       }
     };
 

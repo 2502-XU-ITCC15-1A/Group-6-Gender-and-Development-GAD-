@@ -5,7 +5,7 @@ const MaintenanceLogSchema = new mongoose.Schema(
     action: {
       type: String,
       required: true,
-      enum: ['school-year-reset'],
+      enum: ['school-year-reset', 'school-year-restore'],
       index: true,
     },
     schoolYear: { type: String, required: true, index: true },
@@ -17,6 +17,8 @@ const MaintenanceLogSchema = new mongoose.Schema(
       registrationsArchived: { type: Number, default: 0 },
       seminarsArchived: { type: Number, default: 0 },
       employeesAffected: { type: Number, default: 0 },
+      registrationsRestored: { type: Number, default: 0 },
+      seminarsRestored: { type: Number, default: 0 },
     },
     notes: { type: String, default: '' },
   },

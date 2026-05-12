@@ -590,6 +590,149 @@ router.get('/archives/:schoolYear/masterlist.xlsx', authMiddleware, async (req, 
   }
 });
 
+// POST /api/admin/maintenance/archives/:schoolYear/restore
+// body: { confirmPhrase, notes? }
+// Moves an archived school year back into the live Seminar/Registration
+// collections and re-adds the seminars to each affected employee's
+// seminarsAttended[]. Then removes the archive docs.
+router.post('/archives/:schoolYear/restore', authMiddleware, async (req, res, next) => {
+  try {
+    const schoolYear = String(req.params.schoolYear);
+    if (!isValidSchoolYear(schoolYear)) {
+      return res.status(400).json({ message: 'Invalid schoolYear' });
+    }
+    const { confirmPhrase, notes } = req.body || {};
+    if (String(confirmPhrase || '').trim() !== RESET_PHRASE) {
+      return res.status(400).json({ message: `Confirmation phrase must be exactly "${RESET_PHRASE}"` });
+    }
+
+    const adminEmployee = await Employee.findById(req.user.id).lean();
+    const adminId = req.user.id;
+
+    const seminarArchives = await SeminarArchive.find({ schoolYear }).lean();
+    const regArchives = await RegistrationArchive.find({ schoolYear }).lean();
+
+    if (!seminarArchives.length && !regArchives.length) {
+      return res.status(404).json({ message: `No archive found for school year ${schoolYear}.` });
+    }
+
+    // Refuse if the live collections still contain a doc with the same ID
+    // (would mean someone re-created records that collide with the archive).
+    const seminarIds = seminarArchives.map((s) => s.originalSeminarId).filter(Boolean);
+    const regIds = regArchives.map((r) => r.originalRegistrationId).filter(Boolean);
+    const [seminarConflicts, regConflicts] = await Promise.all([
+      seminarIds.length ? Seminar.find({ _id: { $in: seminarIds } }).select('_id').lean() : [],
+      regIds.length ? Registration.find({ _id: { $in: regIds } }).select('_id').lean() : [],
+    ]);
+    if (seminarConflicts.length || regConflicts.length) {
+      return res.status(409).json({
+        message:
+          `Cannot restore: ${seminarConflicts.length} seminar(s) and ` +
+          `${regConflicts.length} registration(s) with conflicting IDs already exist live. ` +
+          `Remove them first.`,
+      });
+    }
+
+    // 1. Restore seminars
+    if (seminarArchives.length) {
+      const docs = seminarArchives.map((s) => ({
+        _id: s.originalSeminarId,
+        schoolYear: s.schoolYear,
+        title: s.title,
+        description: s.description || '',
+        location: s.location || '',
+        date: s.date,
+        startTime: s.startTime,
+        durationHours: s.durationHours,
+        mandatory: !!s.mandatory,
+        capacity: s.capacity,
+        isHeld: !!s.isHeld,
+        heldAt: s.heldAt,
+        sessions: s.sessions || [],
+        registeredEmployees: s.registeredEmployees || [],
+        certificateReleaseMode: s.certificateReleaseMode,
+        requiredSessionsToPass: s.requiredSessionsToPass,
+        multiSessionType: s.multiSessionType,
+        createdAt: s.originalCreatedAt,
+        updatedAt: s.originalUpdatedAt,
+      }));
+      await Seminar.insertMany(docs);
+    }
+
+    // 2. Restore registrations
+    if (regArchives.length) {
+      const docs = regArchives.map((r) => ({
+        _id: r.originalRegistrationId,
+        seminarID: r.seminarID,
+        employeeID: r.employeeID,
+        schoolYear: r.schoolYear,
+        registeredAt: r.registeredAt,
+        status: r.status,
+        certificateIssued: !!r.certificateIssued,
+        certificateIssuedAt: r.certificateIssuedAt,
+        certificateCode: r.certificateCode,
+        evaluationAvailable: !!r.evaluationAvailable,
+        evaluationCompleted: !!r.evaluationCompleted,
+        sessionAttendance: r.sessionAttendance || [],
+        chosenSessionId: r.chosenSessionId || null,
+        createdAt: r.originalCreatedAt,
+        updatedAt: r.originalUpdatedAt,
+      }));
+      await Registration.insertMany(docs);
+    }
+
+    // 3. Re-add seminars to each affected employee's seminarsAttended[]
+    const employeeToSeminars = new Map();
+    for (const r of regArchives) {
+      if (!r.employeeID || !r.seminarID) continue;
+      const k = String(r.employeeID);
+      if (!employeeToSeminars.has(k)) employeeToSeminars.set(k, new Set());
+      employeeToSeminars.get(k).add(String(r.seminarID));
+    }
+    const bulkOps = [];
+    for (const [empId, sIds] of employeeToSeminars) {
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: empId },
+          update: { $addToSet: { seminarsAttended: { $each: [...sIds] } } },
+        },
+      });
+    }
+    if (bulkOps.length) await Employee.bulkWrite(bulkOps);
+
+    // 4. Delete archive docs for this school year
+    await Promise.all([
+      SeminarArchive.deleteMany({ schoolYear }),
+      RegistrationArchive.deleteMany({ schoolYear }),
+    ]);
+
+    // 5. Audit log
+    const log = await MaintenanceLog.create({
+      action: 'school-year-restore',
+      schoolYear,
+      triggeredBy: adminId,
+      triggeredByName: adminEmployee?.name || '',
+      triggeredByEmail: adminEmployee?.email || req.user.email || '',
+      triggeredAt: new Date(),
+      counts: {
+        seminarsRestored: seminarArchives.length,
+        registrationsRestored: regArchives.length,
+        employeesAffected: employeeToSeminars.size,
+      },
+      notes: String(notes || '').trim(),
+    });
+
+    res.json({
+      message: 'Archive restored to live collections',
+      schoolYear,
+      counts: log.counts,
+      logId: log._id,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/admin/maintenance/logs
 router.get('/logs', authMiddleware, async (req, res, next) => {
   try {
