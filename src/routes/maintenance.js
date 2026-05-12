@@ -48,6 +48,27 @@ const formatDate = (d) => {
   return dt.toISOString().slice(0, 10);
 };
 
+// Build a "Last, First" display string + a lowercase last-name sort key.
+// Prefers explicit firstName/lastName fields; falls back to parsing the
+// full name (last token = last name).
+const buildNameFields = (firstName, lastName, fullName) => {
+  const f = (firstName || '').trim();
+  const l = (lastName || '').trim();
+  if (l || f) {
+    const display = l && f ? `${l}, ${f}` : (l || f);
+    return { display, sortKey: (l || f).toLowerCase() };
+  }
+  const n = (fullName || '').trim();
+  if (!n) return { display: 'None', sortKey: '~~' };
+  const parts = n.split(/\s+/);
+  if (parts.length === 1) {
+    return { display: parts[0], sortKey: parts[0].toLowerCase() };
+  }
+  const last = parts[parts.length - 1];
+  const first = parts.slice(0, -1).join(' ');
+  return { display: `${last}, ${first}`, sortKey: last.toLowerCase() };
+};
+
 // GET /api/admin/maintenance/current-school-year
 router.get('/current-school-year', authMiddleware, (req, res) => {
   res.json({ schoolYear: currentSchoolYear() });
@@ -109,18 +130,22 @@ const PER_SEMINAR_KEYS = [
 const buildMasterlistData = async (schoolYear, { source }) => {
   const byEmployee = new Map();
   const add = (emp, item) => {
-    const name = displayValue(emp?.name);
-    const key = String(name).trim().toLowerCase();
-    if (!byEmployee.has(key)) {
-      byEmployee.set(key, {
-        name,
+    const { display, sortKey } = buildNameFields(emp?.firstName, emp?.lastName, emp?.name);
+    // Group by the original employee identity when available; otherwise fall back
+    // to the display string. This prevents accidentally merging two employees
+    // who happen to share a last name.
+    const groupKey = emp?._id ? `id:${String(emp._id)}` : `name:${display.toLowerCase()}`;
+    if (!byEmployee.has(groupKey)) {
+      byEmployee.set(groupKey, {
+        name: display,
+        sortKey,
         department: displayValue(emp?.department),
         position:   displayValue(emp?.position),
         email:      displayValue(emp?.email),
         items: [],
       });
     }
-    byEmployee.get(key).items.push(item);
+    byEmployee.get(groupKey).items.push(item);
   };
 
   if (source === 'archive') {
@@ -165,7 +190,7 @@ const buildMasterlistData = async (schoolYear, { source }) => {
   }
 
   const rows = [...byEmployee.values()];
-  rows.sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
+  rows.sort((a, b) => String(a.sortKey).localeCompare(String(b.sortKey), undefined, { sensitivity: 'base' }));
   for (const row of rows) {
     row.items.sort((a, b) => {
       if (a.seminarDate === 'None') return 1;
@@ -398,6 +423,8 @@ router.post('/reset-school-year', authMiddleware, async (req, res, next) => {
           },
           employeeSnapshot: {
             name: e.name,
+            firstName: e.firstName,
+            lastName: e.lastName,
             email: e.email,
             department: e.department,
             position: e.position,

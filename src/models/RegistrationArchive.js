@@ -39,6 +39,8 @@ const RegistrationArchiveSchema = new mongoose.Schema(
     },
     employeeSnapshot: {
       name: String,
+      firstName: String,
+      lastName: String,
       email: String,
       department: String,
       position: String,
