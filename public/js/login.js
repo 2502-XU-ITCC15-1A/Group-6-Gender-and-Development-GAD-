@@ -8,79 +8,6 @@ window.addEventListener('unhandledrejection', (event) => {
 const _EYE = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const _EYE_OFF = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 
-window.handleGoogleCredential = async (response) => {
-  const statusEl = document.getElementById('login-status');
-  if (statusEl) statusEl.textContent = 'Signing in with Google…';
-  try {
-    const res = await fetch('/api/auth/google', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential: response.credential }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body?.message || 'Google sign-in failed.');
-
-    if (body.needsProfile) {
-      const params = new URLSearchParams({
-        token: body.profileToken,
-        email: body.email || '',
-        firstName: body.firstName || '',
-        lastName: body.lastName || '',
-      });
-      if (statusEl) statusEl.textContent = 'New account — finish your profile to continue…';
-      window.location.href = `/signup.html#google=${encodeURIComponent(params.toString())}`;
-      return;
-    }
-
-    if (body.token) window.localStorage.setItem('gims_employee_token', body.token);
-    if (body.role) window.localStorage.setItem('gims_role', String(body.role));
-    if (statusEl) statusEl.textContent = 'Logged in. Redirecting to your dashboard…';
-    setTimeout(() => {
-      window.location.href = body.role === 'admin' ? '/admin.html' : '/employee.html';
-    }, 700);
-  } catch (err) {
-    console.error('[login] google sign-in failed', err);
-    if (statusEl) statusEl.textContent = err.message || 'Google sign-in failed.';
-  }
-};
-
-const initGoogleSignIn = async () => {
-  const container = document.getElementById('google-signin-container');
-  if (!container) return;
-  try {
-    const res = await fetch('/api/auth/google-config');
-    const { clientId } = await res.json();
-    if (!clientId) {
-      container.innerHTML = '<span class="muted small">Google sign-in is not configured.</span>';
-      return;
-    }
-    const tryRender = () => {
-      if (!window.google?.accounts?.id) {
-        setTimeout(tryRender, 150);
-        return;
-      }
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: window.handleGoogleCredential,
-        auto_select: false,
-        ux_mode: 'popup',
-      });
-      window.google.accounts.id.renderButton(container, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'signin_with',
-        shape: 'rectangular',
-        logo_alignment: 'left',
-        width: 320,
-      });
-    };
-    tryRender();
-  } catch {
-    container.innerHTML = '<span class="muted small">Google sign-in unavailable.</span>';
-  }
-};
-
 const _decodeJwt = (jwtToken) => {
   try {
     const parts = String(jwtToken || '').split('.');
@@ -108,7 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (_redirectIfLoggedIn()) return;
   // Re-check on Back/Forward (bfcache) so a fresh login doesn't re-render here.
   window.addEventListener('pageshow', () => { _redirectIfLoggedIn(); });
-  initGoogleSignIn();
 
   document.querySelectorAll('.password-toggle').forEach(btn => {
     btn.innerHTML = _EYE;

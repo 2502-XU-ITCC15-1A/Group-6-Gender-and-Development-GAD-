@@ -5,97 +5,6 @@ window.addEventListener('unhandledrejection', (event) => {
   console.error('[signup] unhandled promise rejection', event.reason);
 });
 
-window.handleSignupGoogleCredential = async (response) => {
-  const banner = document.getElementById('signup-google-banner');
-  const completeStatusEl = document.getElementById('signup-complete-status');
-  try {
-    const res = await fetch('/api/auth/google', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential: response.credential }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body?.message || 'Google sign-in failed.');
-
-    if (body.needsProfile) {
-      const params = new URLSearchParams({
-        token: body.profileToken,
-        email: body.email || '',
-        firstName: body.firstName || '',
-        lastName: body.lastName || '',
-      });
-      window.location.hash = `google=${encodeURIComponent(params.toString())}`;
-      window.location.reload();
-      return;
-    }
-
-    if (body.token) window.localStorage.setItem('gims_employee_token', body.token);
-    if (body.role) window.localStorage.setItem('gims_role', String(body.role));
-    if (banner) {
-      banner.style.display = 'block';
-      banner.querySelector('p').textContent = 'You already have an account. Redirecting to your dashboard…';
-    }
-    setTimeout(() => {
-      window.location.href = body.role === 'admin' ? '/admin.html' : '/employee.html';
-    }, 700);
-  } catch (err) {
-    console.error('[signup] google sign-in failed', err);
-    if (completeStatusEl) completeStatusEl.textContent = err.message || 'Google sign-in failed.';
-  }
-};
-
-const initSignupGoogleButton = async () => {
-  const container = document.getElementById('signup-google-container');
-  if (!container) return;
-  try {
-    const res = await fetch('/api/auth/google-config');
-    const { clientId } = await res.json();
-    if (!clientId) {
-      container.innerHTML = '<span class="muted small">Google sign-up is not configured.</span>';
-      return;
-    }
-    const tryRender = () => {
-      if (!window.google?.accounts?.id) {
-        setTimeout(tryRender, 150);
-        return;
-      }
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: window.handleSignupGoogleCredential,
-        auto_select: false,
-        ux_mode: 'popup',
-      });
-      window.google.accounts.id.renderButton(container, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'signup_with',
-        shape: 'rectangular',
-        logo_alignment: 'left',
-        width: 320,
-      });
-    };
-    tryRender();
-  } catch {
-    container.innerHTML = '<span class="muted small">Google sign-up unavailable.</span>';
-  }
-};
-
-const parseGoogleHash = () => {
-  const hash = window.location.hash || '';
-  if (!hash.startsWith('#google=')) return null;
-  const raw = decodeURIComponent(hash.slice('#google='.length));
-  const params = new URLSearchParams(raw);
-  const token = params.get('token');
-  if (!token) return null;
-  return {
-    token,
-    email: params.get('email') || '',
-    firstName: params.get('firstName') || '',
-    lastName: params.get('lastName') || '',
-  };
-};
-
 const _SIGNUP_EYE = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const _SIGNUP_EYE_OFF = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 
@@ -111,8 +20,6 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
     });
   });
-
-  initSignupGoogleButton();
 
   const topbar = document.getElementById('topbar');
   const navbar = document.getElementById('navbar');
@@ -243,8 +150,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let registrationToken = null;
   /** @type {string | null} */
   let verifiedEmail = null;
-  /** @type {string | null} */
-  let googleProfileToken = null;
 
   const profileInputs = [
     firstNameInput,
@@ -280,52 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   setProfileEnabled(false);
-
-  const googleHash = parseGoogleHash();
-  if (googleHash) {
-    googleProfileToken = googleHash.token;
-    verifiedEmail = googleHash.email;
-
-    const banner = document.getElementById('signup-google-banner');
-    const googleCard = document.getElementById('signup-google-card');
-    const step1Heading = document.getElementById('signup-step1-heading');
-    const step1Help = document.getElementById('signup-step1-help');
-    if (banner) banner.style.display = 'block';
-    if (googleCard) googleCard.style.display = 'none';
-    if (step1Heading) step1Heading.style.display = 'none';
-    if (step1Help) step1Help.style.display = 'none';
-
-    if (emailInput) {
-      emailInput.value = googleHash.email;
-      emailInput.readOnly = true;
-      const emailLabel = emailInput.closest('label');
-      if (emailLabel) emailLabel.style.display = 'none';
-    }
-    if (sendPinBtn) sendPinBtn.style.display = 'none';
-    if (resendPinBtn) resendPinBtn.style.display = 'none';
-    if (verifyPinBtn) verifyPinBtn.style.display = 'none';
-    if (pinInput) {
-      const pinLabel = pinInput.closest('label');
-      if (pinLabel) pinLabel.style.display = 'none';
-    }
-
-    if (firstNameInput) firstNameInput.value = googleHash.firstName;
-    if (lastNameInput) lastNameInput.value = googleHash.lastName;
-
-    if (passwordInput) {
-      const pwLabel = passwordInput.closest('label');
-      if (pwLabel) pwLabel.style.display = 'none';
-      passwordInput.removeAttribute('required');
-    }
-
-    setProfileEnabled(true);
-    const step2Heading = step2Container?.querySelector('h2');
-    if (step2Heading) {
-      step2Heading.firstChild.textContent = 'Complete your profile ';
-    }
-    const lockBadge = step2Container?.querySelector('.signup-step2-lock-badge');
-    if (lockBadge) lockBadge.style.display = 'none';
-  }
 
   sendPinBtn?.addEventListener('click', async () => {
     clearStatus();
@@ -407,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
   submitBtn?.addEventListener('click', async () => {
     clearStatus();
     clearAllFieldErrors();
-    if (!registrationToken && !googleProfileToken) {
+    if (!registrationToken) {
       completeStatusEl.textContent = 'Please verify your PIN before creating an account.';
       showErrorPopup('Please verify your XU email PIN before creating an account.');
       return;
@@ -431,9 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
       })(),
     };
 
-    if (!googleProfileToken) {
-      payload.password = /** @type {HTMLInputElement} */ (passwordInput).value.trim();
-    }
+    payload.password = /** @type {HTMLInputElement} */ (passwordInput).value.trim();
 
     const missingLabels = [];
     requiredFieldMap.forEach(({ input, label }) => {
@@ -443,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
         missingLabels.push(label);
       }
     });
-    if (!googleProfileToken && !payload.password) {
+    if (!payload.password) {
       markFieldInvalid(passwordInput, true);
       missingLabels.push('Password');
     }
@@ -457,22 +314,18 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (!googleProfileToken) {
-      if (!isPasswordSufficient(payload.password)) {
-        const msg = 'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.';
-        completeStatusEl.textContent = msg;
-        showErrorPopup(msg);
-        markFieldInvalid(passwordInput, true);
-        if (passwordHintEl) passwordHintEl.style.display = 'block';
-        passwordInput?.focus();
-        return;
-      }
+    if (!isPasswordSufficient(payload.password)) {
+      const msg = 'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.';
+      completeStatusEl.textContent = msg;
+      showErrorPopup(msg);
+      markFieldInvalid(passwordInput, true);
+      if (passwordHintEl) passwordHintEl.style.display = 'block';
+      passwordInput?.focus();
+      return;
     }
 
-    const endpoint = googleProfileToken
-      ? '/api/auth/google/complete-account'
-      : '/api/auth/create-account';
-    const authToken = googleProfileToken || registrationToken;
+    const endpoint = '/api/auth/create-account';
+    const authToken = registrationToken;
 
     try {
       submitBtn.disabled = true;
@@ -495,9 +348,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.localStorage.setItem('gims_role', 'employee');
       }
       completeStatusEl.textContent = 'Account created. Redirecting to your dashboard…';
-      if (googleProfileToken && window.location.hash) {
-        history.replaceState(null, '', window.location.pathname);
-      }
       setTimeout(() => {
         window.location.href = '/employee.html';
       }, 1200);
