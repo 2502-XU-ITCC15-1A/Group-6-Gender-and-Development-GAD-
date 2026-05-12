@@ -2983,7 +2983,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     resetBtn.addEventListener('click', async () => {
       const sy = syInput.value.trim();
-      if (!confirm(`Final confirmation:\n\nReset school year ${sy}?\n\nThis archives all seminars and registrations from that year and clears every employee's certificate count. This cannot be undone from the UI.`)) {
+      if (!confirm(`Final confirmation:\n\nReset school year ${sy}?\n\nThis archives EVERY existing seminar and registration under "${sy}" and clears every employee's certificate count. After this, the live seminar list will be empty. This cannot be undone from the UI.`)) {
         return;
       }
       resetBtn.disabled = true;

@@ -682,24 +682,24 @@
                 </div>
               </div>
 
-              <div class="card" style="margin-top:1rem; border:1px solid #d99; background:#fff8f8;">
-                <h2 style="color:#a30000; margin-top:0;">End of School Year Reset</h2>
+              <div class="card maint-danger-card" style="margin-top:1rem;">
+                <div class="maint-danger-badge">Danger Zone</div>
+                <h2 style="margin-top:0.6rem;">End of School Year Reset</h2>
                 <p class="muted">
-                  This permanently moves the selected school year's seminars and certificate
-                  records into archive collections, then clears every employee's certificate
-                  count back to 0. Employees and admin accounts are not deleted.
+                  This permanently moves <strong>every existing seminar</strong> and its
+                  certificate records into the archive under the school year label below.
+                  Afterwards the live seminar list will be empty and each employee's
+                  certificate count is reset to 0. Employees and admin accounts are not deleted.
                 </p>
 
-                <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end; margin-top:0.75rem;">
-                  <label style="margin-bottom:0; min-width:200px;">
-                    Target School Year
+                <div class="maint-target-box">
+                  <label class="maint-target-field">
+                    <span>Target School Year</span>
                     <input type="text" id="maintenance-school-year" placeholder="2025-2026" />
                   </label>
                   <button class="btn secondary" type="button" id="maintenance-preview-btn">Preview Impact</button>
                 </div>
-                <div id="maintenance-preview-output" class="muted" style="margin-top:0.6rem;"></div>
-
-                <hr style="margin:1.25rem 0;" />
+                <div id="maintenance-preview-output" class="muted maint-preview-output"></div>
 
                 <ol class="maint-checklist" id="maintenance-checklist">
                   <li class="maint-step is-active" data-step="1">
@@ -722,7 +722,7 @@
                       </label>
                       <label class="maint-step-check">
                         <input type="checkbox" id="maintenance-confirm-understand" disabled />
-                        <span>I understand this will archive the school year and reset all employees' certificate counts to 0. This cannot be undone from the UI.</span>
+                        <span>I understand this will archive <strong>every existing seminar</strong> under the chosen school year and reset all employees' certificate counts to 0. This cannot be undone from the UI.</span>
                       </label>
                     </div>
                   </li>
@@ -732,14 +732,13 @@
                     <div class="maint-step-body">
                       <h3>Type the confirmation phrase</h3>
                       <p class="muted">Type <code>GIMS MAINTENANCE</code> exactly:</p>
-                      <input type="text" id="maintenance-phrase" placeholder="GIMS MAINTENANCE" disabled style="max-width:320px;" />
-                      <label style="display:block;">
-                        Notes (optional)
+                      <input type="text" id="maintenance-phrase" class="maint-phrase-input" placeholder="GIMS MAINTENANCE" disabled />
+                      <label class="maint-notes-field">
+                        <span>Notes (optional)</span>
                         <textarea id="maintenance-notes" rows="2" placeholder="Reason for reset, year-end remarks, etc." disabled></textarea>
                       </label>
                       <div>
-                        <button class="btn" type="button" id="maintenance-reset-btn" disabled
-                                style="background:#a30000; border-color:#a30000;">
+                        <button class="btn maint-reset-btn" type="button" id="maintenance-reset-btn" disabled>
                           Reset School Year
                         </button>
                       </div>

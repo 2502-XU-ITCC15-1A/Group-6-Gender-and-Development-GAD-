@@ -13,7 +13,6 @@ import MaintenanceLog from '../models/MaintenanceLog.js';
 import {
   getSchoolYear,
   currentSchoolYear,
-  schoolYearRange,
   isValidSchoolYear,
 } from '../services/schoolYearService.js';
 
@@ -49,38 +48,6 @@ const formatDate = (d) => {
   return dt.toISOString().slice(0, 10);
 };
 
-// Resolve which seminars belong to a given school year. Falls back to the
-// seminar.date range so legacy records (no schoolYear field) still match.
-const findSeminarsForSchoolYear = async (schoolYear, { includeArchive = false } = {}) => {
-  const range = schoolYearRange(schoolYear);
-  const orConditions = [{ schoolYear }];
-  if (range) {
-    orConditions.push({
-      schoolYear: { $in: [null, ''] },
-      date: { $gte: range[0], $lt: range[1] },
-    });
-  }
-  return Seminar.find({ $or: orConditions }).lean();
-};
-
-const findRegistrationsForSchoolYear = async (schoolYear, seminarIds) => {
-  const range = schoolYearRange(schoolYear);
-  const orConditions = [{ schoolYear }];
-  if (seminarIds && seminarIds.length) {
-    orConditions.push({
-      schoolYear: { $in: [null, ''] },
-      seminarID: { $in: seminarIds },
-    });
-  }
-  if (range) {
-    orConditions.push({
-      schoolYear: { $in: [null, ''] },
-      registeredAt: { $gte: range[0], $lt: range[1] },
-    });
-  }
-  return Registration.find({ $or: orConditions }).lean();
-};
-
 // GET /api/admin/maintenance/current-school-year
 router.get('/current-school-year', authMiddleware, (req, res) => {
   res.json({ schoolYear: currentSchoolYear() });
@@ -94,9 +61,9 @@ router.get('/preview', authMiddleware, async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid schoolYear (expected YYYY-YYYY)' });
     }
 
-    const seminars = await findSeminarsForSchoolYear(schoolYear);
-    const seminarIds = seminars.map((s) => s._id);
-    const registrations = await findRegistrationsForSchoolYear(schoolYear, seminarIds);
+    // Reset archives ALL existing seminars/registrations into the chosen school year.
+    const seminars = await Seminar.find({}).lean();
+    const registrations = await Registration.find({}).lean();
 
     const employeeIds = new Set(registrations.map((r) => String(r.employeeID)));
     const certificatesIssued = registrations.filter((r) => r.certificateIssued).length;
@@ -116,69 +83,97 @@ router.get('/preview', authMiddleware, async (req, res, next) => {
 });
 
 const MASTERLIST_COLUMNS = [
-  { header: 'Employee Name',        key: 'name',           width: 28 },
-  { header: 'Department',           key: 'department',     width: 32 },
-  { header: 'Position',             key: 'position',       width: 22 },
-  { header: 'Email',                key: 'email',          width: 30 },
-  { header: 'Seminar Title',        key: 'seminarTitle',   width: 32 },
-  { header: 'Seminar Date',         key: 'seminarDate',    width: 14 },
-  { header: 'Duration (hrs)',       key: 'duration',       width: 14 },
-  { header: 'Status',               key: 'status',         width: 16 },
-  { header: 'Certificate Issued',   key: 'certIssued',     width: 18 },
-  { header: 'Certificate Code',     key: 'certCode',       width: 26 },
-  { header: 'Certificate Issued At', key: 'certIssuedAt',  width: 18 },
-  { header: 'School Year',          key: 'schoolYear',     width: 14 },
+  { header: 'Employee Name',         key: 'name',         width: 28 },
+  { header: 'Department',            key: 'department',   width: 30 },
+  { header: 'Position',              key: 'position',     width: 22 },
+  { header: 'Email',                 key: 'email',        width: 30 },
+  { header: 'Seminar Title',         key: 'seminarTitle', width: 34 },
+  { header: 'Seminar Date',          key: 'seminarDate',  width: 14 },
+  { header: 'Duration (hrs)',        key: 'duration',     width: 14 },
+  { header: 'Status',                key: 'status',       width: 14 },
+  { header: 'Certificate Issued',    key: 'certIssued',   width: 16 },
+  { header: 'Certificate Code',      key: 'certCode',     width: 26 },
+  { header: 'Certificate Issued At', key: 'certIssuedAt', width: 18 },
+  { header: 'School Year',           key: 'schoolYear',   width: 14 },
 ];
 
+// Columns that are repeated per seminar (rendered as a numbered, multi-line list
+// inside a single row per employee). Other columns are rendered once.
+const PER_SEMINAR_KEYS = [
+  'seminarTitle', 'seminarDate', 'duration', 'status',
+  'certIssued', 'certCode', 'certIssuedAt', 'schoolYear',
+];
+
+// Aggregate per employee. Returns one row per unique name (alphabetical),
+// with an `items` array of per-seminar entries.
 const buildMasterlistData = async (schoolYear, { source }) => {
+  const byEmployee = new Map();
+  const add = (emp, item) => {
+    const name = displayValue(emp?.name);
+    const key = String(name).trim().toLowerCase();
+    if (!byEmployee.has(key)) {
+      byEmployee.set(key, {
+        name,
+        department: displayValue(emp?.department),
+        position:   displayValue(emp?.position),
+        email:      displayValue(emp?.email),
+        items: [],
+      });
+    }
+    byEmployee.get(key).items.push(item);
+  };
+
   if (source === 'archive') {
     const regs = await RegistrationArchive.find({ schoolYear }).lean();
-    return regs.map((r) => {
+    for (const r of regs) {
       const s = r.seminarSnapshot || {};
       const e = r.employeeSnapshot || {};
-      return {
-        name: displayValue(e.name),
-        department: displayValue(e.department),
-        position: displayValue(e.position),
-        email: displayValue(e.email),
+      add(e, {
         seminarTitle: displayValue(s.title),
-        seminarDate: formatDate(s.date),
-        duration: displayValue(s.durationHours),
-        status: displayValue(r.status),
-        certIssued: r.certificateIssued ? 'Yes' : 'No',
-        certCode: displayValue(r.certificateCode),
+        seminarDate:  formatDate(s.date),
+        duration:     displayValue(s.durationHours),
+        status:       displayValue(r.status),
+        certIssued:   r.certificateIssued ? 'Yes' : 'No',
+        certCode:     displayValue(r.certificateCode),
         certIssuedAt: formatDate(r.certificateIssuedAt),
-        schoolYear: displayValue(r.schoolYear),
-      };
-    });
+        schoolYear:   displayValue(r.schoolYear),
+      });
+    }
+  } else {
+    // Live source = ALL seminars / registrations (the reset archives everything).
+    const seminars = await Seminar.find({}).lean();
+    const seminarMap = new Map(seminars.map((s) => [String(s._id), s]));
+    const registrations = await Registration.find({}).lean();
+    const employeeIds = [...new Set(registrations.map((r) => String(r.employeeID)))];
+    const employees = await Employee.find({ _id: { $in: employeeIds } }).lean();
+    const empMap = new Map(employees.map((e) => [String(e._id), e]));
+
+    for (const r of registrations) {
+      const s = seminarMap.get(String(r.seminarID)) || {};
+      const e = empMap.get(String(r.employeeID)) || {};
+      add(e, {
+        seminarTitle: displayValue(s.title),
+        seminarDate:  formatDate(s.date),
+        duration:     displayValue(s.durationHours),
+        status:       displayValue(r.status),
+        certIssued:   r.certificateIssued ? 'Yes' : 'No',
+        certCode:     displayValue(r.certificateCode),
+        certIssuedAt: formatDate(r.certificateIssuedAt),
+        schoolYear:   displayValue(r.schoolYear || schoolYear),
+      });
+    }
   }
 
-  const seminars = await findSeminarsForSchoolYear(schoolYear);
-  const seminarIds = seminars.map((s) => s._id);
-  const seminarMap = new Map(seminars.map((s) => [String(s._id), s]));
-  const registrations = await findRegistrationsForSchoolYear(schoolYear, seminarIds);
-  const employeeIds = [...new Set(registrations.map((r) => String(r.employeeID)))];
-  const employees = await Employee.find({ _id: { $in: employeeIds } }).lean();
-  const empMap = new Map(employees.map((e) => [String(e._id), e]));
-
-  return registrations.map((r) => {
-    const s = seminarMap.get(String(r.seminarID)) || {};
-    const e = empMap.get(String(r.employeeID)) || {};
-    return {
-      name: displayValue(e.name),
-      department: displayValue(e.department),
-      position: displayValue(e.position),
-      email: displayValue(e.email),
-      seminarTitle: displayValue(s.title),
-      seminarDate: formatDate(s.date),
-      duration: displayValue(s.durationHours),
-      status: displayValue(r.status),
-      certIssued: r.certificateIssued ? 'Yes' : 'No',
-      certCode: displayValue(r.certificateCode),
-      certIssuedAt: formatDate(r.certificateIssuedAt),
-      schoolYear: displayValue(r.schoolYear || schoolYear),
-    };
-  });
+  const rows = [...byEmployee.values()];
+  rows.sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
+  for (const row of rows) {
+    row.items.sort((a, b) => {
+      if (a.seminarDate === 'None') return 1;
+      if (b.seminarDate === 'None') return -1;
+      return String(a.seminarDate).localeCompare(String(b.seminarDate));
+    });
+  }
+  return rows;
 };
 
 const buildMasterlistWorkbook = async (schoolYear, rows) => {
@@ -234,14 +229,33 @@ const buildMasterlistWorkbook = async (schoolYear, rows) => {
   });
   headerRow.height = 26;
 
-  // Data rows
+  // Data rows: one per employee. Per-seminar columns become numbered, multi-line cells.
   rows.forEach((row, idx) => {
-    const excelRow = ws.addRow(row);
-    excelRow.height = 20;
+    const data = {
+      name: row.name,
+      department: row.department,
+      position: row.position,
+      email: row.email,
+    };
+    const count = row.items.length;
+    PER_SEMINAR_KEYS.forEach((key) => {
+      if (count === 0) {
+        data[key] = '—';
+      } else {
+        data[key] = row.items
+          .map((it, i) => `${i + 1}. ${it[key] ?? 'None'}`)
+          .join('\n');
+      }
+    });
+
+    const excelRow = ws.addRow(data);
+    const lineCount = Math.max(1, count);
+    excelRow.height = Math.min(260, 22 + (lineCount - 1) * 16);
     const isAlt = idx % 2 === 1;
+
     excelRow.eachCell({ includeEmpty: true }, (cell) => {
       cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF111827' } };
-      cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
       cell.border = {
         top:    { style: 'hair', color: { argb: 'FFE5E7EB' } },
         bottom: { style: 'hair', color: { argb: 'FFE5E7EB' } },
@@ -257,27 +271,32 @@ const buildMasterlistWorkbook = async (schoolYear, rows) => {
       }
     });
 
-    // Center-align short, code-like, or status columns
+    // Center-align short/code-like columns
     ['seminarDate', 'duration', 'status', 'certIssued', 'certCode', 'certIssuedAt', 'schoolYear']
       .forEach((key) => {
         const cell = excelRow.getCell(key);
         cell.alignment = { ...cell.alignment, horizontal: 'center' };
       });
 
-    // Color the certificate Yes/No
-    const ci = excelRow.getCell('certIssued');
-    if (ci.value === 'Yes') {
-      ci.font = { ...ci.font, bold: true, color: { argb: 'FF0A7A0A' } };
-    } else if (ci.value === 'None' || ci.value === 'No') {
-      ci.font = { ...ci.font, color: { argb: 'FF6B7280' } };
-    }
+    // Bold the employee name
+    const nameCell = excelRow.getCell('name');
+    nameCell.font = { ...nameCell.font, bold: true, color: { argb: 'FF14264F' } };
 
-    // Dim "None" cells so empties read as muted
-    excelRow.eachCell({ includeEmpty: false }, (cell) => {
+    // Dim "None" / empty employee-level cells
+    ['name', 'department', 'position', 'email'].forEach((key) => {
+      const cell = excelRow.getCell(key);
       if (cell.value === 'None') {
         cell.font = { ...cell.font, italic: true, color: { argb: 'FF9CA3AF' } };
       }
     });
+
+    // Dim em-dash placeholder in per-seminar cells when employee has no records
+    if (count === 0) {
+      PER_SEMINAR_KEYS.forEach((key) => {
+        const cell = excelRow.getCell(key);
+        cell.font = { ...cell.font, italic: true, color: { argb: 'FF9CA3AF' } };
+      });
+    }
   });
 
   // If empty result, add a friendly note row
@@ -333,12 +352,14 @@ router.post('/reset-school-year', authMiddleware, async (req, res, next) => {
     const adminEmployee = await Employee.findById(req.user.id).lean();
     const adminId = req.user.id;
 
-    // 1. Gather seminars and registrations for the SY
-    const seminars = await findSeminarsForSchoolYear(schoolYear);
+    // 1. Gather ALL seminars and registrations. After this reset there should be
+    //    no seminars left in the live collection — everything moves to the archive
+    //    under the chosen school year label.
+    const seminars = await Seminar.find({}).lean();
     const seminarIds = seminars.map((s) => s._id);
     const seminarMap = new Map(seminars.map((s) => [String(s._id), s]));
 
-    const registrations = await findRegistrationsForSchoolYear(schoolYear, seminarIds);
+    const registrations = await Registration.find({}).lean();
     const affectedEmployeeIds = [...new Set(registrations.map((r) => String(r.employeeID)))];
 
     // Snapshot employee data for archive

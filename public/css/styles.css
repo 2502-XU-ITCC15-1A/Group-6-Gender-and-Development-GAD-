@@ -1863,3 +1863,93 @@ textarea.is-invalid {
 .maint-step-check span {
   display: block;
 }
+
+/* Branded "danger zone" maintenance card (rounded box) */
+.maint-danger-card {
+  position: relative;
+  border: 1px solid rgba(163, 0, 0, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 247, 247, 0.85), rgba(255, 255, 255, 0.95));
+  box-shadow: 0 8px 28px rgba(163, 0, 0, 0.06);
+}
+.maint-danger-card h2 {
+  color: #a30000;
+}
+.maint-danger-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(163, 0, 0, 0.08);
+  color: #a30000;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.maint-target-box {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-top: 0.9rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+.maint-target-field {
+  margin: 0;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.maint-target-field span {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.maint-target-field input {
+  border-radius: var(--radius-sm);
+}
+
+.maint-preview-output {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  min-height: 1.2em;
+}
+.maint-preview-output:empty {
+  display: none;
+}
+
+.maint-phrase-input {
+  max-width: 320px;
+  border-radius: var(--radius-sm);
+}
+.maint-notes-field {
+  display: block;
+}
+.maint-notes-field span {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.maint-notes-field textarea {
+  border-radius: var(--radius-sm);
+}
+
+.maint-reset-btn {
+  background: linear-gradient(135deg, #7a0000, #a30000);
+  border-color: #a30000;
+}
+.maint-reset-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5e0000, #8a0000);
+}
