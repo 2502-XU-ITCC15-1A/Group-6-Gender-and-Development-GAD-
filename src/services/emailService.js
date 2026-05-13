@@ -1,38 +1,40 @@
-import nodemailer from 'nodemailer';
+import axios from 'axios';
 import Employee from '../models/Employee.js';
 import Seminar from '../models/Seminar.js';
 
-let transporterPromise = null;
 
-const createTransporter = async () => {
-  const user = String(process.env.GMAIL_USER || '').trim();
-  const pass = String(process.env.GMAIL_APP_PASSWORD || '').trim();
-  const hasPlaceholderUser = /^your-.*@example\.com$/i.test(user);
-  const hasPlaceholderPass = /^your-.*$/i.test(pass);
+const sendMailViaAPI = async (options) => {
+  try {
+    const payload = {
+      sender: { name: "GIMS", email: "kiethlybangamu@gmail.com" },
+      to: [{ email: options.to }],
+      subject: options.subject,
+      htmlContent: options.html,
+      textContent: options.text || "GIMS Notification"
+    };
 
-  if (!user || !pass || hasPlaceholderUser || hasPlaceholderPass) {
-    throw new Error(
-      'Gmail is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env using a real Gmail address and a 16-character App Password.'
-    );
-  }
+    // Brevo formatting for the certificate attachment
+    if (options.attachments && options.attachments.length > 0) {
+      payload.attachment = options.attachments.map(att => ({
+        name: att.filename,
+        // Brevo requires base64 string for content
+        content: Buffer.isBuffer(att.content) ? att.content.toString('base64') : att.content
+      }));
+    }
 
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user, pass },
-  });
-
-  await transporter.verify();
-  return transporter;
-};
-
-const getTransporter = async () => {
-  if (!transporterPromise) {
-    transporterPromise = createTransporter().catch((err) => {
-      transporterPromise = null;
-      throw err;
+    const response = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+      headers: {
+        'api-key': process.env.BREVO_API_KEY, // Ensure this is set in Render Dashboard
+        'Content-Type': 'application/json'
+      }
     });
+
+    console.log('Email sent successfully via API!');
+    return response.data;
+  } catch (error) {
+    console.error("Brevo API Error:", error.response?.data || error.message);
+    throw error;
   }
-  return transporterPromise;
 };
 
 const sendMailWithRetry = async (mailOptions) => {
@@ -182,12 +184,11 @@ export const sendVerificationPinEmail = async (email, code, expiresAt) => {
     body: `<p style="margin:0;">Enter this code on the signup page to complete your email verification. If you did not start a GIMS signup, you can safely ignore this message.</p>`,
   });
 
-  await sendMailWithRetry({
-    from: `"GIMS" <${process.env.GMAIL_USER}>`,
+await sendMailViaAPI({
     to: email,
     subject: 'Your GIMS verification PIN',
-    text: `Your GIMS verification PIN is: ${code}\n\nThis code expires at ${expiresStr} (5 minutes).\n\nIf you did not start a GIMS signup, you can ignore this message.\n\n— Xavier University GAD Office`,
-    html,
+    text: `Your GIMS verification PIN is: ${code}`, // Simple text fallback
+    html, // Your beautiful branded template
   });
 };
 
@@ -206,7 +207,7 @@ export const sendPasswordResetPinEmail = async (email, code, expiresAt) => {
     body: `<p style="margin:0;">If you did not request a password reset, you can safely ignore this email — your account remains secure.</p>`,
   });
 
-  await sendMailWithRetry({
+  await sendMailViaAPI({
     from: `"GIMS" <${process.env.GMAIL_USER}>`,
     to: email,
     subject: 'GIMS password reset PIN',
@@ -228,11 +229,10 @@ export const sendTemporaryPasswordEmail = async (email, tempPassword) => {
     body: `<p style="margin:0;">For your security, this password should be changed as soon as you sign in. If you did not expect this reset, please contact the GAD Office.</p>`,
   });
 
-  await sendMailWithRetry({
-    from: `"GIMS" <${process.env.GMAIL_USER}>`,
+  await sendMailViaAPI({
     to: email,
-    subject: 'GIMS temporary password',
-    text: `Your GIMS password has been reset by an administrator.\n\nTemporary password: ${tempPassword}\n\nPlease sign in and change it as soon as possible.\n\n— Xavier University GAD Office`,
+    subject: 'Your GIMS temporary password', 
+    text: `Your temporary password is: ${tempPassword}`, 
     html,
   });
 };
@@ -273,7 +273,7 @@ export const sendCertificateEmail = async ({
       ]
     : [];
 
-  await sendMailWithRetry({
+  await sendMailViaAPI({
     from: `"GIMS" <${process.env.GMAIL_USER}>`,
     to: employee.email,
     subject: `Your GIMS certificate: ${seminarTitle}`,
@@ -304,11 +304,67 @@ export const sendReminderEmail = async (employee, remainingCount) => {
       <p style="margin: 16px 0 0; color:${COLORS.muted}; font-size: 14px;">Thank you for your continued participation in shaping a more inclusive Xavier University.</p>`,
   });
 
-  await sendMailWithRetry({
+  await sendMailViaAPI({
     from: `"XU GAD Office" <${process.env.GMAIL_USER}>`,
     to: employee.email,
     subject: 'GAD Seminar Compliance Reminder',
     text: `Dear ${employee.name},\n\nOur records show that you have remaining GAD seminars to complete for the current academic year.\n\nYou still need ${remainingCount} ${noun} to complete your requirements.\n\nPlease refer to the upcoming GAD seminar schedule and ensure your participation.\n\nThank you,\nXavier University GAD Office`,
+    html,
+  });
+};
+
+export const sendSeminarReminderEmail = async ({ employee, seminar, sessionDate, sessionStartTime }) => {
+  if (!employee?.email) throw new Error('Employee has no email address.');
+
+  const seminarTitle = seminar?.title || 'GAD Seminar';
+  const dateObj = sessionDate ? new Date(sessionDate) : (seminar?.date ? new Date(seminar.date) : null);
+  const dateStr = dateObj
+    ? dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    : 'tomorrow';
+  const timeStr = sessionStartTime || seminar?.startTime || '';
+  const location = seminar?.location || 'TBA';
+  const duration = seminar?.durationHours ? `${seminar.durationHours} hour(s)` : '';
+
+  const detailsRows = [
+    ['Date', dateStr],
+    timeStr ? ['Start Time', timeStr] : null,
+    ['Location', location],
+    duration ? ['Duration', duration] : null,
+  ].filter(Boolean);
+
+  const detailsHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 4px 0 18px; border-collapse: separate; border-spacing: 0;">
+      ${detailsRows.map(([label, value]) => `
+        <tr>
+          <td style="padding: 8px 0; font-family:${SANS}; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: ${COLORS.muted}; font-weight: 600; width: 110px; vertical-align: top;">
+            ${label}
+          </td>
+          <td style="padding: 8px 0; font-family:${SANS}; font-size: 15px; color: ${COLORS.text}; border-bottom: 1px solid #eef0f5;">
+            ${value}
+          </td>
+        </tr>`).join('')}
+    </table>`;
+
+  const html = buildEmail({
+    preheader: `Reminder: "${seminarTitle}" is tomorrow.`,
+    heading: 'Your seminar is tomorrow',
+    intro: `Hello ${employee.name || 'colleague'}, this is a friendly reminder that the GAD seminar you registered for is scheduled for <strong>tomorrow</strong>. We look forward to seeing you there.`,
+    highlight: {
+      label: 'Seminar',
+      value: seminarTitle,
+      caption: dateStr,
+    },
+    body: `<p style="margin: 0 0 10px;"><strong style="color:${COLORS.navyDeep};">Session details</strong></p>
+      ${detailsHtml}
+      <p style="margin: 0 0 10px; font-family:${SANS}; font-size: 14px; color:${COLORS.muted};">
+        Please arrive a few minutes early. If you can no longer attend, kindly cancel your registration in GIMS so the slot can be released.
+      </p>`,
+  });
+
+  await sendMailViaAPI({
+    to: employee.email,
+    subject: `Reminder: "${seminarTitle}" is tomorrow`,
+    text: `Hello ${employee.name || 'colleague'},\n\nThis is a reminder that "${seminarTitle}" is scheduled for ${dateStr}${timeStr ? ` at ${timeStr}` : ''}.\nLocation: ${location}\n\nWe look forward to seeing you there.\n\n— Xavier University GAD Office`,
     html,
   });
 };

@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import path from 'path';
@@ -12,6 +13,7 @@ import LearningMaterial from '../models/LearningMaterial.js';
 import Article from '../models/Article.js';
 import Evaluation from '../models/Evaluation.js';
 import { sendBulkReminders, sendReminderEmail } from '../services/emailService.js';
+import { runReminderTick } from '../services/seminarReminderScheduler.js';
 import User from '../models/User.js';
 import {
   buildCertificateDownload,
@@ -228,6 +230,107 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
+// Lightweight badge counts shown on the admin sidebar (pending actions for
+// seminars). The frontend polls this to render the unread-style dot.
+router.get('/notifications/summary', authMiddleware, async (req, res, next) => {
+  try {
+    const pendingApprovals = await Registration.countDocuments({ status: 'pre-registered' });
+
+    const seminars = await Seminar.find({ isDeleted: { $ne: true } })
+      .select('isHeld sessions')
+      .lean();
+    const pendingFinalization = seminars.reduce((acc, s) => {
+      const sessions = Array.isArray(s.sessions) ? s.sessions : [];
+      const allHeld = sessions.length > 0 && sessions.every((sess) => sess.isHeld);
+      return acc + (allHeld && !s.isHeld ? 1 : 0);
+    }, 0);
+
+    res.json({
+      seminars: {
+        pendingApprovals,
+        pendingFinalization,
+        total: pendingApprovals + pendingFinalization,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Aggregated notification bell feed for admins. Returns a small list of
+// general-purpose items grouped by seminar (pre-registrations awaiting
+// approval, evaluations submitted) so a single bell scales across many
+// employees without one row per person.
+router.get('/notifications/bell', authMiddleware, async (req, res, next) => {
+  try {
+    const seminars = await Seminar.find({ isDeleted: { $ne: true } })
+      .select('title date')
+      .lean();
+    const seminarMap = new Map(seminars.map((s) => [String(s._id), s]));
+
+    const pendingBySeminar = await Registration.aggregate([
+      { $match: { status: 'pre-registered' } },
+      { $group: { _id: '$seminarID', count: { $sum: 1 }, latest: { $max: '$registeredAt' } } },
+    ]);
+
+    const evalsBySeminar = await Evaluation.aggregate([
+      { $group: { _id: '$seminarID', count: { $sum: 1 }, latest: { $max: '$submittedAt' } } },
+    ]);
+
+    const items = [];
+
+    for (const row of pendingBySeminar) {
+      const seminar = seminarMap.get(String(row._id));
+      if (!seminar) continue;
+      const count = Number(row.count || 0);
+      if (count <= 0) continue;
+      items.push({
+        type: 'pre-registration',
+        seminarId: String(row._id),
+        seminarTitle: seminar.title || 'Untitled Seminar',
+        count,
+        message:
+          count === 1
+            ? `1 employee pre-registered for "${seminar.title}" — review and approve.`
+            : `${count} employees pre-registered for "${seminar.title}" — review and approve.`,
+        timestamp: row.latest || new Date(),
+      });
+    }
+
+    for (const row of evalsBySeminar) {
+      const seminar = seminarMap.get(String(row._id));
+      if (!seminar) continue;
+      const count = Number(row.count || 0);
+      if (count <= 0) continue;
+      items.push({
+        type: 'evaluation',
+        seminarId: String(row._id),
+        seminarTitle: seminar.title || 'Untitled Seminar',
+        count,
+        message:
+          count === 1
+            ? `1 evaluation submitted for "${seminar.title}".`
+            : `${count} evaluations submitted for "${seminar.title}".`,
+        timestamp: row.latest || new Date(),
+      });
+    }
+
+    items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const totalPendingApprovals = items
+      .filter((i) => i.type === 'pre-registration')
+      .reduce((acc, i) => acc + i.count, 0);
+
+    res.json({
+      items,
+      unreadCount: items.length,
+      totalPendingApprovals,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Dashboard summary
 router.get('/reports/summary', authMiddleware, async (req, res, next) => {
   try {
@@ -305,6 +408,7 @@ router.get('/employees', authMiddleware, async (req, res, next) => {
         accountStatus: e.accountStatus === 'deactivated' ? 'deactivated' : 'active',
         isActive: e.accountStatus !== 'deactivated',
         deactivatedAt: e.deactivatedAt || null,
+        registeredAt: e.createdAt || null,
         updatedAt: e.updatedAt,
       };
     });
@@ -437,6 +541,7 @@ router.get('/employees/:id/profile', authMiddleware, async (req, res, next) => {
         position: employee.position || '',
         accountStatus: employee.accountStatus === 'deactivated' ? 'deactivated' : 'active',
         deactivatedAt: employee.deactivatedAt || null,
+        registeredAt: employee.createdAt || null,
         seminarStatus: attended >= required ? 'Complete' : 'Incomplete',
         completionText: `${attended}/${required}`,
       },
@@ -505,7 +610,7 @@ const buildValidatedSessions = (rawSessions, allowPast = false) => {
 
 router.post('/seminars', authMiddleware, async (req, res, next) => {
   try {
-    const { title, description, mandatory, capacity, autoSendCertificates, certificateReleaseMode, multiSessionType } = req.body;
+    const { title, description, location, resourcePerson, mandatory, capacity, autoSendCertificates, certificateReleaseMode, multiSessionType } = req.body;
     if (!title || !description || !capacity) {
       return res.status(400).json({ message: 'Title, description, and capacity are required.' });
     }
@@ -524,6 +629,8 @@ router.post('/seminars', authMiddleware, async (req, res, next) => {
     const seminar = await Seminar.create({
       title: String(title).trim(),
       description: String(description).trim(),
+      location: String(location || '').trim(),
+      resourcePerson: String(resourcePerson || '').trim(),
       date: sessions[0].date,
       startTime: sessions[0].startTime,
       durationHours: sessions[0].durationHours,
@@ -796,6 +903,7 @@ router.get('/seminars/:id/participants', authMiddleware, async (req, res, next) 
         department: r.employeeID?.department,
         position: r.employeeID?.position,
         email: r.employeeID?.email,
+        registeredAt: r.registeredAt || r.createdAt || null,
         status: r.status,
         certificateIssued: Boolean(r.certificateIssued),
         evaluationAvailable: Boolean(r.evaluationAvailable),
@@ -861,11 +969,25 @@ router.post('/seminars/:id/approve', authMiddleware, async (req, res, next) => {
       return res.status(400).json({ message: 'Select at least one participant to approve.' });
     }
 
+    const registrationObjectIds = registrationIds
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+    if (!registrationObjectIds.length) {
+      return res.status(400).json({ message: 'Invalid registration id(s).' });
+    }
+
     const registrations = await Registration.find({
-      _id: { $in: registrationIds },
+      _id: { $in: registrationObjectIds },
       seminarID: seminar._id,
       status: 'pre-registered',
     }).populate('employeeID', 'name');
+
+    if (!registrations.length) {
+      return res.status(400).json({
+        message:
+          'No pending pre-registrations matched those selections. Refresh the list and try again, or check that each row is still awaiting approval.',
+      });
+    }
 
     let approvedCount = 0;
     for (const reg of registrations) {
@@ -894,13 +1016,22 @@ router.post('/seminars/:id/held', authMiddleware, async (req, res, next) => {
   try {
     const seminar = await findActiveSeminarById(req.params.id);
     if (!seminar) return res.status(404).json({ message: 'Seminar not found' });
-    if (!seminar.isHeld) {
+    // Allow toggling via body { isHeld: false } or { held: false }
+    const desired = (req.body && (req.body.isHeld ?? req.body.held));
+    const targetHeld = typeof desired === 'boolean' ? desired : true;
+    if (targetHeld && !seminar.isHeld) {
       seminar.isHeld = true;
       seminar.heldAt = new Date();
       await seminar.save();
+    } else if (!targetHeld && seminar.isHeld) {
+      seminar.isHeld = false;
+      seminar.heldAt = undefined;
+      await seminar.save();
     }
     res.json({
-      message: 'Seminar marked as held. You can now record attendance.',
+      message: seminar.isHeld
+        ? 'Seminar marked as held. You can now record attendance.'
+        : 'Seminar unmarked as held.',
       seminar,
     });
   } catch (err) {
@@ -1074,7 +1205,7 @@ router.get('/employees/:employeeId/certificates/:registrationId/download', authM
 
 router.put('/seminars/:id', authMiddleware, async (req, res, next) => {
   try {
-    const { title, description, mandatory, capacity, autoSendCertificates, certificateReleaseMode, multiSessionType } = req.body;
+    const { title, description, location, resourcePerson, mandatory, capacity, autoSendCertificates, certificateReleaseMode, multiSessionType } = req.body;
     if (!title || !description || !capacity) {
       return res.status(400).json({ message: 'Title, description, and capacity are required.' });
     }
@@ -1117,6 +1248,8 @@ router.put('/seminars/:id', authMiddleware, async (req, res, next) => {
 
     seminar.title = String(title).trim();
     seminar.description = String(description).trim();
+    if (typeof location !== 'undefined') seminar.location = String(location || '').trim();
+    if (typeof resourcePerson !== 'undefined') seminar.resourcePerson = String(resourcePerson || '').trim();
     seminar.sessions = newSessions;
     seminar.date = newSessions[0]?.date || seminar.date;
     seminar.startTime = newSessions[0]?.startTime || seminar.startTime;
@@ -1406,19 +1539,26 @@ router.get('/reports/employees.csv', authMiddleware, async (req, res, next) => {
       buildActiveSeminarIdSet(),
     ]);
 
-    const header = 'Name,Department,Position,Seminars Attended\n';
-    const rows = employees
-      .map((e) => {
-        const attended = countActiveAttendedSeminars(e.seminarsAttended, activeSeminarIdSet);
-        return `"${(e.name || '').replace(/"/g, '""')}","${(e.department || '').replace(
-          /"/g,
-          '""'
-        )}","${(e.position || '').replace(/"/g, '""')}",${attended}`;
-      })
-      .join('\n');
+    const csvCell = (value) => {
+      if (value === null || value === undefined || value === '') return '"None"';
+      if (typeof value === 'number') return String(value);
+      const s = String(value);
+      if (s.trim() === '') return '"None"';
+      return `"${s.replace(/"/g, '""')}"`;
+    };
 
-    const csv = header + rows;
-    res.setHeader('Content-Type', 'text/csv');
+    const headers = ['Name', 'Department', 'Position', 'Seminars Attended'];
+    const rows = [headers].concat(
+      employees.map((e) => [
+        e.name,
+        e.department,
+        e.position,
+        countActiveAttendedSeminars(e.seminarsAttended, activeSeminarIdSet),
+      ])
+    );
+
+    const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="gims_employees.csv"');
     res.send(csv);
   } catch (err) {
@@ -1430,6 +1570,17 @@ router.post('/notifications/reminders', authMiddleware, async (req, res, next) =
   try {
     const result = await sendBulkReminders();
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Manual trigger for the T-1 day seminar reminder scheduler.
+// Useful for testing without waiting for the hourly tick.
+router.post('/notifications/seminar-reminders/run', authMiddleware, async (req, res, next) => {
+  try {
+    const result = await runReminderTick();
+    res.json({ message: 'Seminar reminder tick complete', ...result });
   } catch (err) {
     next(err);
   }
